@@ -1,9 +1,15 @@
 version: '3'
 
+vars:
+  G_IR_FILE_PLUGIN_DIR: "{{.ROOT_DIR}}/plugins/out_clp_ir_file"
+
 tasks:
   build-file-plugin:
     dir: "{{.ROOT_DIR}}/plugins/out_clp_ir_file"
     cmds:
       - go build -buildmode=c-shared -o out_clp_ir_file.so
     sources:
-      - "{{.ROOT_DIR}}/plugins/out_clp_ir_file/**/*.go"
+      - "{{.G_IR_FILE_PLUGIN_DIR}}/**/*.go"
+    generates:
+      - "{{.G_IR_FILE_PLUGIN_DIR}}/out_clp_ir_file.h"
+      - "{{.G_IR_FILE_PLUGIN_DIR}}/out_clp_ir_file.so"
