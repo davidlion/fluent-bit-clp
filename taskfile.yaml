@@ -1,0 +1,9 @@
+version: '3'
+
+tasks:
+  build-file-plugin:
+    dir: "{{.ROOT_DIR}}/plugins/out_clp_ir_file"
+    cmds:
+      - go build -buildmode=c-shared -o out_clp_ir_file.so
+    sources:
+      - "{{.ROOT_DIR}}/plugins/out_clp_ir_file/**/*.go"

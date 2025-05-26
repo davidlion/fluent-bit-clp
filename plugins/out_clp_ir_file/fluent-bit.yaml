@@ -1,0 +1,13 @@
+plugins:
+  - /path/to/out_gstdout.so
+
+service:
+  log_level: "info"
+
+pipeline:
+  inputs:
+    - name: "dummy"
+
+  outputs:
+    - name: "out_clp_ir_file"
+      match: "*"
