@@ -1,8 +1,8 @@
 plugins:
-  - /path/to/out_gstdout.so
+  - /fluent-bit/lib/out_clp_ir_file.so
 
 service:
-  log_level: "info"
+  log_level: "trace"
 
 pipeline:
   inputs:

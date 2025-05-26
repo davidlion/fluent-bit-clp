@@ -2,14 +2,20 @@ package main
 
 import (
 	"C"
-	"fmt"
+	"encoding/json"
+	"log"
 	"os"
+	"time"
 	"unsafe"
 
-	"github.com/y-scope/fluent-bit-clp/internal/decoder"
 	"github.com/fluent/fluent-bit-go/output"
+
+	"github.com/klauspost/compress/zstd"
+
 	"github.com/y-scope/clp-ffi-go/ffi"
 	"github.com/y-scope/clp-ffi-go/ir"
+
+	"github.com/y-scope/fluent-bit-clp/internal/decoder"
 )
 
 const cPluginName = "out_clp_ir_file"
@@ -33,43 +39,59 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 	// Open file for writing and make IR Writer (move to FLBPluginInit).
 	file, err := os.OpenFile("/tmp/path.ir.zstd", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0660)
 	if nil != err {
-		return "", fmt.Errorf("os.Create: %v", err)
+		log.Printf("[error] os.Create: %v", err)
+		return output.FLB_ERROR
 	}
 	// var zstdWriter io.WriteCloser
 	zstdWriter, err := zstd.NewWriter(file)
 	if nil != err {
-		return "", fmt.Errorf("zstd.NewWriter failed: %v", err)
+		log.Printf("[error] zstd.NewWriter failed: %v", err)
+		return output.FLB_ERROR
 	}
-	var irWriter *ir.Writer
-	irWriter, err := NewWriter[FourByteEncoding](zstdWriter)
+	irWriter, err := ir.NewWriter[ir.FourByteEncoding](zstdWriter)
 
 	// Decode logs from fluent bit and write to IR.
-	dec := decoder.New(data, size)
+	dec := decoder.New(data, int(length))
 	for {
-		ts, jsonRecord, err := decoder.GetRecord(dec)
+		flbTimestamp, jsonRecord, err := decoder.GetRecord(dec)
 		if err != nil {
-			return logEvents, err
+			log.Printf("[info] decoder.GetRecord error: %v", err)
+			break
 		}
+
+		var timestamp time.Time
+		switch t := flbTimestamp.(type) {
+		case decoder.FlbTime:
+			timestamp = t.Time
+		case uint64:
+			timestamp = time.Unix(int64(t), 0)
+		default:
+			log.Printf("time provided invalid, defaulting to now. Invalid type is %T", t)
+			timestamp = time.Now()
+		}
+
 		var userKvPairs map[string]any
-		err := json.Unmarshal(jsonRecord, &userKvPairs)
+		err = json.Unmarshal(jsonRecord, &userKvPairs)
 		if err != nil {
-			return "", fmt.Errorf("failed to unmarshal json record %v: %w", jsonRecord, err)
+			log.Printf("[error] failed to unmarshal json record %v: %w", jsonRecord, err)
+			return output.FLB_ERROR
 		}
 
 		var event *ffi.LogEvent = ffi.NewLogEvent()
-		event.AutoKvPairs["timestamp"] = decodeTs(ts).UnixMilli()
+		event.AutoKvPairs["timestamp"] = timestamp.UnixMilli()
 		event.UserKvPairs = userKvPairs
-		_, err := irWriter.WriteLogEvent(*event)
+		_, err = irWriter.WriteLogEvent(*event)
 		if nil != err {
-			return "", fmt.Errorf("ir.Writer.WriteLogEvent failed: %v", err)
+			log.Printf("[error] ir.Writer.WriteLogEvent failed: %v", err)
+			return output.FLB_ERROR
 		}
 	}
 
-
 	// Cleanup the writers (move to FLBPluginExitCtx).
-	err := irWriter.Close()
+	err = irWriter.Close()
 	if nil != err {
-		t.Fatalf("ir.Writer.Close failed: %v", err)
+		log.Printf("[error] ir.Writer.Close failed: %v", err)
+		return output.FLB_ERROR
 	}
 	zstdWriter.Close()
 
