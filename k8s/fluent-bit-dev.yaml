@@ -10,15 +10,13 @@ spec:
     # To inspect logs, use the following command; kubectl logs <pod> -c <container>
     - name: fluent-bit-dev
       image: fluent/fluent-bit:3.2.7-debug
-      command: [ "sh", "-c", "/fluent-bit/bin/fluent-bit --config /fluent-bit/confs/fluent-bit.conf" ]
+      command: [ "sh", "-c", "/fluent-bit/bin/fluent-bit --config /fluent-bit/plugins/out_clp_ir_file/fluent-bit.yaml" ]
       env:
         - name: AWS_ENDPOINT_URL
           value: http://minio:9091
       volumeMounts:
         - name: aws-credentials-volume
           mountPath: "/root/.aws"
-        - name: fluent-bit-confs-volume
-          mountPath: "/fluent-bit/confs"
         - name: clp-plugin-volume
           mountPath: "/fluent-bit/plugins"
       imagePullPolicy: IfNotPresent
@@ -26,9 +24,6 @@ spec:
     - name: aws-credentials-volume
       secret:
         secretName: aws-credentials
-    - name: fluent-bit-confs-volume
-      configMap:
-        name: fluent-bit-confs
     - name: clp-plugin-volume
       hostPath:
         path: /plugins

@@ -23,7 +23,7 @@ k3d cluster create yscope --servers 1 --agents 1 \
 ## Deploy minio and log-viewer
 ```shell
 kubectl apply -f minio.yaml
-kubectl apply -f deploy-yscope-log-viewer.yaml -f aws-credentials.yaml
+kubectl apply -f yscope-log-viewer-deployment.yaml -f aws-credentials.yaml
 ```
 
 ## Deploy fluent-bit dev container
@@ -35,7 +35,7 @@ kubectl apply -f fluent-bit-dev.yaml -f fluent-bit-dev-config.yaml -f aws-creden
 kubectl exec -it fluent-bit-dev -c fluent-bit-dev -n default -- /bin/bash
 
 # Test log collection
-echo '{"message": "a log message"}' > /temp/test.log
+echo '{"message": "a log message"}' > /temp/test-0.log
 # Afterwards, /tmp/path.ir.zstd file should be created containing compressed logs
 
 # Inspect the logs for fluent-bit
@@ -43,4 +43,13 @@ kubectl logs fluent-bit-dev
 # We should get the following
 [2025/05/27 02:35:58] [ info] [input:tail:tail.0] inotify_fs_add(): inode=865010 watch_fd=1 name=/tmp/test.log
 2025/05/27 02:36:03 [info] decoder.GetRecord error: EOF
+
+
+# port forward
+kubectl port-forward minio 9000:9000
+```
+
+## Delete cluster
+```angular2html
+k3d cluster delete yscope
 ```
