@@ -12,7 +12,7 @@ spec:
       - /bin/bash
       - -c
     args:
-      - minio server /data --console-address :9090 --address :9091
+      - minio server /data -address :9000 --console-address :9001
     volumeMounts:
       - mountPath: /data
         name: data-volume
@@ -30,11 +30,11 @@ metadata:
 spec:
   type: NodePort
   ports:
-    - port: 9090
-      nodePort: 30008
-      name: "9090"
-    - port: 9091
-      nodePort: 30007
-      name: "9091"
+    - port: 9000
+      nodePort: 30000
+      name: "9000"
+    - port: 9001
+      nodePort: 30001
+      name: "9001"
   selector:
     app: minio
