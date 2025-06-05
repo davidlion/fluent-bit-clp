@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/y-scope/fluent-bit-clp/internal/outctx2"
 	"log"
 	"os"
@@ -140,27 +140,18 @@ func upload(localPath, remotePath string) {
 	bucket := "logs"
 
 	// Load AWS config from default environment
-	//cfg, err := config.LoadDefaultConfig(context.TODO(),
-	//	config.WithRegion("us-east-1"),
-	//)
-	//if err != nil {
-	//	log.Fatalf("Failed to load config: %v", err)
-	//}
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithEndpointResolver(aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
+			return aws.Endpoint{
+				URL: os.Getenv("AWS_ENDPOINT_URL"),
+			}, nil
+		})),
+	)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
 
-	resolver := aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
-		return aws.Endpoint{
-			PartitionID:       "aws",
-			URL:               "http://minio:9000",
-			SigningRegion:     "us-east-2",
-			HostnameImmutable: true,
-		}, nil
-	})
-
-	client := s3.NewFromConfig(aws.Config{
-		Region:           "us-east-2",
-		Credentials:      credentials.NewStaticCredentialsProvider("minioadmin", "minioadmin", "dummy"),
-		EndpointResolver: resolver,
-	}, func(o *s3.Options) {
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = true // Crucial for MinIO!
 	})
 
@@ -178,6 +169,8 @@ func upload(localPath, remotePath string) {
 	}
 	defer file.Close()
 
+	log.Println("Opened file:", localPath)
+
 	// Upload file to path
 	_, err = client.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
@@ -185,8 +178,8 @@ func upload(localPath, remotePath string) {
 		Body:   file,
 
 		// Optional:
-		//ContentType: aws.String("application/zstd"),
-		//ACL:         types.ObjectCannedACLPublicRead,
+		// ContentType: aws.String("application/zstd"),
+		// ACL:         types.ObjectCannedACLPublicRead,
 	})
 	if err != nil {
 		log.Fatalf("failed to upload file, %v", err)
