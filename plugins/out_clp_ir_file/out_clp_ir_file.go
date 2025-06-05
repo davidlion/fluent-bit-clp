@@ -68,17 +68,17 @@ func bucketExists(client *s3.Client, bucket string) (bool, error) {
 		return true, nil // Bucket exists and is accessible
 	}
 
-	//var apiErr smithy.APIError
-	//if ok := errorAs(err, &apiErr); ok {
-	//	code := apiErr.ErrorCode()
-	//	if code == "NotFound" || code == "404" || code == "NoSuchBucket" {
-	//		return false, nil // Bucket does not exist
-	//	}
-	//	// AccessDenied means the bucket exists but you don't own it (or can't access)
-	//	if code == "Forbidden" || code == "403" || code == "AccessDenied" {
-	//		return true, nil // Exists, but not accessible/owned
-	//	}
-	//}
+	var apiErr smithy.APIError
+	if ok := errorAs(err, &apiErr); ok {
+		code := apiErr.ErrorCode()
+		if code == "NotFound" || code == "404" || code == "NoSuchBucket" {
+			return false, nil // Bucket does not exist
+		}
+		// AccessDenied means the bucket exists but you don't own it (or can't access)
+		if code == "Forbidden" || code == "403" || code == "AccessDenied" {
+			return true, nil // Exists, but not accessible/owned
+		}
+	}
 	return false, err // Unexpected error
 }
 
@@ -93,14 +93,14 @@ func bucketCreateIfNotExist(client *s3.Client, bucket string) error {
 		return nil
 	}
 
-	//createInput := &s3.CreateBucketInput{
-	//	Bucket: aws.String(bucket),
-	//}
-	//
-	//_, err = client.CreateBucket(context.TODO(), createInput)
-	//if err != nil {
-	//	log.Fatalf("failed to create bucket: %v", err)
-	//}
+	createInput := &s3.CreateBucketInput{
+		Bucket: aws.String(bucket),
+	}
+
+	_, err = client.CreateBucket(context.TODO(), createInput)
+	if err != nil {
+		log.Fatalf("failed to create bucket: %v", err)
+	}
 	fmt.Println("Bucket created successfully:", bucket)
 
 	return nil
@@ -155,8 +155,9 @@ func upload(localPath, remotePath string) {
 		o.UsePathStyle = true // Crucial for MinIO!
 	})
 
+	// Need to fix the problem where the bucket fails to create if it doesn't exist and set bucket policy to public read
 	//bucketCreateIfNotExist(client, bucket)
-
+	//
 	//err = SetBucketPublicRead(client, bucket)
 	//if err != nil {
 	//	log.Fatalf("failed to set bucket public: %v", err)
