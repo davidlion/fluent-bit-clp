@@ -14,6 +14,8 @@ spec:
       env:
         - name: AWS_ENDPOINT_URL
           value: http://minio:9091
+        - name: AWS_REGION
+          value: us-west-2
       volumeMounts:
         - name: aws-credentials-volume
           mountPath: "/root/.aws"

@@ -17,7 +17,7 @@ Follow the guide here: https://k3d.io/stable/#installation
 ```shell
 # Start k8s with 1 server and 1 agent, and mount plugins local directory to the cluster
 k3d cluster create yscope --servers 1 --agents 1 \
-  -v <path to yscope fluent-bit-clp GitHub repo directory>/plugins:/plugins
+  -v <path to yscope fluent-bit-clp GitHub repo directory>/plugins:/plugins -p 9000:30000@agent:0 -p 9001:30001@agent:0
 ```
 
 ## Deploy minio and log-viewer
@@ -35,7 +35,7 @@ kubectl apply -f fluent-bit-dev.yaml -f fluent-bit-dev-config.yaml -f aws-creden
 kubectl exec -it fluent-bit-dev -c fluent-bit-dev -n default -- /bin/bash
 
 # Test log collection
-echo '{"message": "a log message"}' > /temp/test-0.log
+echo '{"message": "a log message"}' > /tmp/test-0.log
 # Afterwards, /tmp/path.ir.zstd file should be created containing compressed logs
 
 # Inspect the logs for fluent-bit
