@@ -2,23 +2,27 @@ package main
 
 import (
 	"C"
+)
+
+// TODO: gci seems to break on these imports
+import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/y-scope/fluent-bit-clp/internal/outctx2"
 	"log"
 	"os"
 	"time"
 	"unsafe"
 
-	"github.com/fluent/fluent-bit-go/output"
-
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
+	"github.com/fluent/fluent-bit-go/output"
 	"github.com/y-scope/clp-ffi-go/ffi"
+
 	"github.com/y-scope/fluent-bit-clp/internal/decoder"
+	"github.com/y-scope/fluent-bit-clp/internal/outctx2"
 )
 
 const cPluginName = "out_clp_ir_file"
@@ -34,7 +38,8 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	// Gets called only once for each instance you have configured.
 	outCtx, err := outctx2.NewStreamingCompressionContext(plugin)
 	if err != nil {
-		log.Fatalf("Failed to initialize plugin: %s", err)
+		log.Printf("[error] Failed to initialize plugin: %s", err)
+		return output.FLB_ERROR
 	}
 
 	// Set the context for this instance so that params can be retrieved during flush.
@@ -44,7 +49,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 }
 
 // errorAs is a helper for Go <1.20. For Go 1.20+, you can use errors.As.
-func errorAs(err error, target interface{}) bool {
+func errorAs(err error, target any) bool {
 	if err == nil {
 		return false
 	}
@@ -85,11 +90,12 @@ func bucketExists(client *s3.Client, bucket string) (bool, error) {
 func bucketCreateIfNotExist(client *s3.Client, bucket string) error {
 	exists, err := bucketExists(client, bucket)
 	if err != nil {
-		log.Fatalf("failed to check if bucket exists: %v", err)
+		log.Printf("[error] Failed to check if bucket exists: %v", err)
+		return err
 	}
 
 	if exists {
-		fmt.Println("Bucket already exists:", bucket)
+		log.Print("Bucket already exists:", bucket)
 		return nil
 	}
 
@@ -99,18 +105,19 @@ func bucketCreateIfNotExist(client *s3.Client, bucket string) error {
 
 	_, err = client.CreateBucket(context.TODO(), createInput)
 	if err != nil {
-		log.Fatalf("failed to create bucket: %v", err)
+		log.Printf("[error] Failed to create bucket: %v", err)
+		return err
 	}
-	fmt.Println("Bucket created successfully:", bucket)
 
+	log.Print("Bucket created successfully:", bucket)
 	return nil
 }
 
 func SetBucketPublicRead(client *s3.Client, bucket string) error {
 	// This policy allows anyone to GetObject from the bucket:
-	policy := map[string]interface{}{
+	policy := map[string]any{
 		"Version": "2012-10-17",
-		"Statement": []map[string]interface{}{
+		"Statement": []map[string]any{
 			{
 				"Effect":    "Allow",
 				"Principal": "*",
@@ -121,7 +128,7 @@ func SetBucketPublicRead(client *s3.Client, bucket string) error {
 	}
 	policyBytes, err := json.Marshal(policy)
 	if err != nil {
-		return fmt.Errorf("failed to marshal policy: %w", err)
+		return fmt.Errorf("[error] Failed to marshal policy: %w", err)
 	}
 
 	_, err = client.PutBucketPolicy(context.TODO(), &s3.PutBucketPolicyInput{
@@ -129,44 +136,50 @@ func SetBucketPublicRead(client *s3.Client, bucket string) error {
 		Policy: aws.String(string(policyBytes)),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to set bucket policy: %w", err)
+		return fmt.Errorf("[error] Failed to set bucket policy: %w", err)
 	}
 
-	fmt.Println("Bucket policy set to public-read for bucket:", bucket)
+	log.Print("Bucket policy set to public-read for bucket:", bucket)
 	return nil
 }
 
-func upload(localPath, remotePath string) {
+func upload(localPath, remotePath string) error {
 	bucket := "logs"
 
 	// Load AWS config from default environment
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithEndpointResolver(aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
-			return aws.Endpoint{
-				URL: os.Getenv("AWS_ENDPOINT_URL"),
-			}, nil
-		})),
+	cfg, err := config.LoadDefaultConfig(
+		context.TODO(),
+		config.WithEndpointResolver(
+			aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
+				return aws.Endpoint{
+					URL: os.Getenv("AWS_ENDPOINT_URL"),
+				}, nil
+			}),
+		),
 	)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Printf("[error] Failed to load config: %v", err)
+		return err
 	}
 
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = true // Crucial for MinIO!
 	})
 
-	// Need to fix the problem where the bucket fails to create if it doesn't exist and set bucket policy to public read
-	//bucketCreateIfNotExist(client, bucket)
-	//
-	//err = SetBucketPublicRead(client, bucket)
-	//if err != nil {
-	//	log.Fatalf("failed to set bucket public: %v", err)
-	//}
+	// TODO: fix the problem where the bucket fails to create if it doesn't exist and set bucket
+	// policy to public read.
+	// bucketCreateIfNotExist(client, bucket)
+	// err = SetBucketPublicRead(client, bucket)
+	// if err != nil {
+	// 	log.Printf("[error] Failed to set bucket public: %v", err)
+	// 	return err
+	// }
 
 	// Open the file
 	file, err := os.Open(localPath)
 	if err != nil {
-		log.Fatalf("failed to open file %q, %v", localPath, err)
+		log.Printf("[error] Failed to open file %q, %v", localPath, err)
+		return err
 	}
 	defer file.Close()
 
@@ -183,15 +196,17 @@ func upload(localPath, remotePath string) {
 		// ACL:         types.ObjectCannedACLPublicRead,
 	})
 	if err != nil {
-		log.Fatalf("failed to upload file, %v", err)
+		log.Printf("[error] Failed to upload file, %v", err)
+		return err
 	}
 
 	if client != nil {
-		fmt.Println("Successfully uploaded file to", bucket, remotePath)
+		log.Print("Successfully uploaded file to", bucket, remotePath)
 	} else {
-		fmt.Println("Failed to upload file to", bucket, remotePath)
+		log.Print("[error] Failed to upload file to", bucket, remotePath)
 	}
 
+	return nil
 }
 
 //export FLBPluginFlushCtx
@@ -201,7 +216,8 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 
 	streamingCompressionContext, ok := p.(*outctx2.StreamingCompressionContext)
 	if !ok {
-		log.Fatal("Could not read context during flush")
+		log.Println("Could not read context during flush")
+		return output.FLB_ERROR
 	}
 
 	// Decode logs from fluent bit and write to IR.
@@ -228,11 +244,11 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 		var userKvPairs map[string]any
 		err = json.Unmarshal(jsonRecord, &userKvPairs)
 		if err != nil {
-			log.Printf("[error] failed to unmarshal json record %v: %w", jsonRecord, err)
+			log.Printf("[error] Failed to unmarshal json record %v: %v", jsonRecord, err)
 			return output.FLB_ERROR
 		}
 
-		var event = ffi.NewLogEvent()
+		event := ffi.NewLogEvent()
 		event.AutoKvPairs["timestamp"] = timestamp
 		event.UserKvPairs = userKvPairs
 		_, err = irWriter.WriteLogEvent(*event)
@@ -242,19 +258,19 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 		}
 	}
 
-	//// Flush if necessary
-	//lastFlushTimestamp := streamingCompressionContext.LastFlushTimestamp
-	//currentTime := time.Now().UnixMilli()
-	//if currentTime-lastFlushTimestamp > 60 {
-	//	err := streamingCompressionContext.ZstdWriter.Flush()
-	//	if err != nil {
-	//		return 0
-	//	}
-	//	streamingCompressionContext.LastFlushTimestamp = currentTime
-	//
-	//	// Upload to s3
-	//	upload("/tmp/path.ir.zstd", "compressed-logs.clp.zst")
-	//}
+	// // Flush if necessary
+	// lastFlushTimestamp := streamingCompressionContext.LastFlushTimestamp
+	// currentTime := time.Now().UnixMilli()
+	// if currentTime-lastFlushTimestamp > 60 {
+	// 	err := streamingCompressionContext.ZstdWriter.Flush()
+	// 	if err != nil {
+	// 		return 0
+	// 	}
+	// 	streamingCompressionContext.LastFlushTimestamp = currentTime
+
+	// 	// Upload to s3
+	// 	upload("/tmp/path.ir.zstd", "compressed-logs.clp.zst")
+	// }
 
 	err := streamingCompressionContext.ZstdWriter.Flush()
 	if err != nil {
@@ -273,7 +289,8 @@ func FLBPluginExitCtx(ctx unsafe.Pointer) int {
 
 	outCtx2, ok := p.(*outctx2.StreamingCompressionContext)
 	if !ok {
-		log.Fatal("Could not read context during flush")
+		log.Printf("[error] could not read context during flush")
+		return output.FLB_ERROR
 	}
 
 	irWriter := outCtx2.IRWriter

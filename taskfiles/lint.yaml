@@ -1,0 +1,81 @@
+version: "3"
+
+includes:
+  utils:
+    internal: true
+    taskfile: "../tools/yscope-dev-utils/exports/taskfiles/utils/utils.yaml"
+
+vars:
+  G_UTILS_CONFIGS_DIR: "{{.ROOT_DIR}}/tools/yscope-dev-utils/exports/lint-configs"
+
+tasks:
+  check:
+    deps:
+      - "check-go"
+      - "check-yaml"
+
+  check-go:
+    # NOTE: golangci-lint does its own caching, so we can omit `sources`.
+    aliases: ["fix-go"]
+    deps:
+      - "venv"
+    cmd: |-
+      "{{.G_LINT_VENV_DIR}}/bin/golangci-lint" run \
+        plugins/...
+
+  check-yaml:
+    aliases: ["fix-yaml"]
+    deps:
+      - "venv"
+    cmd: |-
+      . "{{.G_LINT_VENV_DIR}}/bin/activate"
+      "{{.G_UTILS_SCRIPTS_DIR}}/find.py" \
+        "{{.ROOT_DIR}}" \
+        --exclude "build/**/*" \
+        --exclude "tools/**/*" \
+        --file-name "*.yaml" \
+        --file-name "*.yml" \
+        | xargs yamllint \
+            --config-file "{{.G_UTILS_CONFIGS_DIR}}/.yamllint.yml" \
+            --strict
+
+  venv:
+    internal: true
+    vars:
+      CHECKSUM_FILE: "{{.G_BUILD_DIR}}/{{.TASK | replace \":\" \"#\"}}.md5"
+      OUTPUT_DIR: "{{.G_LINT_VENV_DIR}}"
+    sources:
+      - "{{.ROOT_DIR}}/taskfile.yaml"
+      - "{{.TASKFILE}}"
+      - "lint-requirements.txt"
+    generates: ["{{.CHECKSUM_FILE}}"]
+    run: "once"
+    deps:
+      - ":init"
+      - task: "utils:checksum:validate"
+        vars:
+          CHECKSUM_FILE: "{{.CHECKSUM_FILE}}"
+          INCLUDE_PATTERNS: ["{{.OUTPUT_DIR}}"]
+    cmds:
+      - task: "utils:misc:create-venv"
+        vars:
+          LABEL: "lint"
+          OUTPUT_DIR: "{{.OUTPUT_DIR}}"
+          REQUIREMENTS_FILE: "{{.ROOT_DIR}}/lint-requirements.txt"
+      - task: "venv-go"
+        vars:
+          VENV_BIN_DIR: "{{.OUTPUT_DIR}}/bin"
+      # This command must be last
+      - task: "utils:checksum:compute"
+        vars:
+          CHECKSUM_FILE: "{{.CHECKSUM_FILE}}"
+          INCLUDE_PATTERNS: ["{{.OUTPUT_DIR}}"]
+
+  venv-go:
+    internal: true
+    requires:
+      vars: ["VENV_BIN_DIR"]
+    cmd: |-
+      curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
+        | sh -s -- -b "{{.VENV_BIN_DIR}}" v2.1.5
+      go install golang.org/x/tools/gopls@latest

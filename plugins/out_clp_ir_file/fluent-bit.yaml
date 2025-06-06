@@ -1,15 +1,16 @@
 plugins:
-  - /fluent-bit/plugins/out_clp_ir_file/out_clp_ir_file.so
+  - "/fluent-bit/plugins/out_clp_ir_file/out_clp_ir_file.so"
 
 service:
   # flush: Set an interval of seconds before to flush record to destination
   flush: 1
 
   # daemon: instruct Fluent Bit to run in foreground or background mode
-  daemon: off
+  daemon: "off"
 
-  # log_level: Set the verbosity level of the service, values can be error, warning, info, debug, trace
-  log_level: trace
+  # log_level: Set the verbosity level of the service, values can be error, warning, info, debug,
+  # trace
+  log_level: "trace"
 
 pipeline:
   inputs:
@@ -24,8 +25,8 @@ pipeline:
       read_from_head: true
       # Skips empty lines in the log file from any further processing or output.
       skip_empty_lines: true
-      # When a message is unstructured (no parser applied), it's appended as a string under the key name log.
-      # This option allows to define an alternative name for that key.
+      # When a message is unstructured (no parser applied), it's appended as a string under the key
+      # name log. This option allows to define an alternative name for that key.
       key: "message"
       processors: []
 
