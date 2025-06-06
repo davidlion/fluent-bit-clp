@@ -27,8 +27,8 @@ tasks:
 
   check-yaml:
     aliases: ["fix-yaml"]
-    # deps:
-    #   - "venv"
+    deps:
+      - "venv"
     vars:
       SRC_FILES_:
         sh: |-
