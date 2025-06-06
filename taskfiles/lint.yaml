@@ -6,7 +6,9 @@ includes:
     taskfile: "../tools/yscope-dev-utils/exports/taskfiles/utils/utils.yaml"
 
 vars:
-  G_UTILS_CONFIGS_DIR: "{{.ROOT_DIR}}/tools/yscope-dev-utils/exports/lint-configs"
+  G_UTILS_EXPORTS_DIR: "{{.ROOT_DIR}}/tools/yscope-dev-utils/exports"
+  G_UTILS_CONFIGS_DIR: "{{.G_UTILS_EXPORTS_DIR}}/lint-configs"
+  G_UTILS_YSTDLIB_PY: "{{.G_UTILS_EXPORTS_DIR}}/ystdlib-py"
 
 tasks:
   check:
@@ -27,17 +29,24 @@ tasks:
     aliases: ["fix-yaml"]
     deps:
       - "venv"
-    cmd: |-
-      . "{{.G_LINT_VENV_DIR}}/bin/activate"
-      "{{.G_UTILS_SCRIPTS_DIR}}/find.py" \
-        "{{.ROOT_DIR}}" \
-        --exclude "build/**/*" \
-        --exclude "tools/**/*" \
-        --file-name "*.yaml" \
-        --file-name "*.yml" \
-        | xargs yamllint \
-            --config-file "{{.G_UTILS_CONFIGS_DIR}}/.yamllint.yml" \
-            --strict
+    vars:
+      SRC_FILES_:
+        sh: |-
+          uv run --project "{{.G_UTILS_YSTDLIB_PY}}" find \
+            "{{.ROOT_DIR}}" \
+            --exclude "build/**/*" \
+            --exclude "tools/**/*" \
+            --filename "*.yaml" \
+            --filename "*.yml"
+      SRC_FILES:
+        ref: >-
+          splitList "\n" .SRC_FILES_
+    cmds:
+      - for:
+          var: "SRC_FILES"
+        cmd: |-
+          . "{{.G_LINT_VENV_DIR}}/bin/activate"
+          yamllint --config-file "{{.G_UTILS_CONFIGS_DIR}}/.yamllint.yml" --strict "{{.ITEM}}"
 
   venv:
     internal: true
