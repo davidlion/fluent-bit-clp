@@ -1,32 +1,45 @@
-# Setup local K8s cluster
-## Install docker
-Follow the guide here: https://docs.docker.com/engine/install/
+# k8s
 
-## Install kubectl
-`kubectl` is the command-line tool for interacting with Kubernetes clusters. You will use it to manage and inspect your k3d cluster.
+## Setup local K8s cluster
 
-Follow the guide here: https://kubernetes.io/docs/tasks/tools/#kubectl
+### Install docker
 
-## Install k3d
+Follow the guide here: [docker]
+
+### Install kubectl
+
+`kubectl` is the command-line tool for interacting with Kubernetes clusters. You will use it to
+manage and inspect your k3d cluster.
+
+Follow the guide here: [kubectl]
+
+### Install k3d
+
 k3d is a lightweight wrapper to run k3s (Rancher Lab's minimal Kubernetes distribution) in docker.
 
-Follow the guide here: https://k3d.io/stable/#installation
+Follow the guide here: [k3d]
 
-# Commands
-## Create k8s cluster
+## Commands
+
+### Create k8s cluster
+
 ```shell
 # Start k8s with 1 server and 1 agent, and mount plugins local directory to the cluster
 k3d cluster create yscope --servers 1 --agents 1 \
-  -v <path to yscope fluent-bit-clp GitHub repo directory>/plugins:/plugins -p 9000:30000@agent:0 -p 9001:30001@agent:0
+  -v <path to yscope fluent-bit-clp GitHub repo directory>/plugins:/plugins \
+  -p 9000:30000@agent:0 \
+  -p 9001:30001@agent:0
 ```
 
-## Deploy minio and log-viewer
+### Deploy minio and log-viewer
+
 ```shell
 kubectl apply -f minio.yaml
 kubectl apply -f yscope-log-viewer-deployment.yaml -f aws-credentials.yaml
 ```
 
-## Deploy fluent-bit dev container
+### Deploy fluent-bit dev container
+
 ```shell
 # Fluent-bit configs are in the yaml file
 kubectl apply -f fluent-bit-dev.yaml -f fluent-bit-dev-config.yaml -f aws-credentials.yaml
@@ -41,15 +54,19 @@ echo '{"message": "a log message"}' > /tmp/test-0.log
 # Inspect the logs for fluent-bit
 kubectl logs fluent-bit-dev
 # We should get the following
-[2025/05/27 02:35:58] [ info] [input:tail:tail.0] inotify_fs_add(): inode=865010 watch_fd=1 name=/tmp/test.log
+[2025/05/27 02:35:58] [info] [input:tail:tail.0] inotify_fs_add(): inode=865010 watch_fd=1 name=/tmp/test.log
 2025/05/27 02:36:03 [info] decoder.GetRecord error: EOF
-
 
 # port forward
 kubectl port-forward minio 9000:9000
 ```
 
-## Delete cluster
+### Delete cluster
+
 ```angular2html
 k3d cluster delete yscope
 ```
+
+[docker]: https://docs.docker.com/engine/install
+[k3d]: https://k3d.io/stable/#installation
+[kubectl]: https://kubernetes.io/docs/tasks/tools/#kubectl

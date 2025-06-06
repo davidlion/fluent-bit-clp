@@ -27,15 +27,15 @@ tasks:
 
   check-yaml:
     aliases: ["fix-yaml"]
-    deps:
-      - "venv"
+    # deps:
+    #   - "venv"
     vars:
       SRC_FILES_:
         sh: |-
           uv run --project "{{.G_UTILS_YSTDLIB_PY}}" find \
             "{{.ROOT_DIR}}" \
-            --exclude "build/**/*" \
-            --exclude "tools/**/*" \
+            --exclude "{{.ROOT_DIR}}/build/**/*" \
+            --exclude "{{.ROOT_DIR}}/tools/**/*" \
             --filename "*.yaml" \
             --filename "*.yml"
       SRC_FILES:

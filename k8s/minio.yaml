@@ -1,40 +1,40 @@
-apiVersion: v1
-kind: Pod
+apiVersion: "v1"
+kind: "Pod"
 metadata:
   labels:
-    app: minio
-  name: minio
+    app: "minio"
+  name: "minio"
 spec:
   containers:
-  - name: minio
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command:
-      - /bin/bash
-      - -c
-    args:
-      - minio server /data -address :9000 --console-address :9001
-    volumeMounts:
-      - mountPath: /data
-        name: data-volume
-    imagePullPolicy: IfNotPresent
+    - name: "minio"
+      image: "minio/minio:RELEASE.2025-04-22T22-12-26Z"
+      command:
+        - "/bin/bash"
+        - "-c"
+      args:
+        - "minio server /data -address :9000 --console-address :9001"
+      volumeMounts:
+        - mountPath: "/data"
+          name: "data-volume"
+      imagePullPolicy: "IfNotPresent"
   volumes:
-    - name: data-volume
-      emptyDir: { }
----
-apiVersion: v1
-kind: Service
+    - name: "data-volume"
+      emptyDir: {}
+---  # yamllint disable-line
+apiVersion: "v1"
+kind: "Service"
 metadata:
-  name: minio
+  name: "minio"
   labels:
-    app: minio
+    app: "minio"
 spec:
-  type: NodePort
+  type: "NodePort"
   ports:
-    - port: 9000
-      nodePort: 30000
+    - port: "9000"
+      nodePort: "30000"
       name: "9000"
-    - port: 9001
-      nodePort: 30001
+    - port: "9001"
+      nodePort: "30001"
       name: "9001"
   selector:
-    app: minio
+    app: "minio"
