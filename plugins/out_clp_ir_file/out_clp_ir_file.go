@@ -210,7 +210,7 @@ func upload(localPath, remotePath string) error {
 }
 
 //export FLBPluginFlushCtx
-func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
+func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, /* tag */_ *C.char) int {
 	// Gets called with a batch of records to be written to an instance.
 	p := output.FLBPluginGetContext(ctx)
 
@@ -233,7 +233,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 		var timestamp int64
 		switch t := flbTimestamp.(type) {
 		case decoder.FlbTime:
-			timestamp = t.Time.UnixMilli()
+			timestamp = t.UnixMilli()
 		case uint64:
 			timestamp = int64(t)
 		default:
@@ -272,13 +272,14 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 	// 	upload("/tmp/path.ir.zstd", "compressed-logs.clp.zst")
 	// }
 
-	err := streamingCompressionContext.ZstdWriter.Flush()
-	if err != nil {
-		return 0
+	if err := streamingCompressionContext.ZstdWriter.Flush(); err != nil {
+		return output.FLB_ERROR
 	}
 
 	// Upload to s3
-	upload("/tmp/compressed-logs.clp.zstd", "compressed-logs.clp.zst")
+	if err := upload("/tmp/compressed-logs.clp.zstd", "compressed-logs.clp.zst"); err != nil {
+		return output.FLB_ERROR
+	}
 
 	return output.FLB_OK
 }
