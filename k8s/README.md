@@ -36,6 +36,7 @@ k3d cluster create yscope --servers 1 --agents 1 \
 ```shell
 kubectl apply -f minio.yaml
 kubectl apply -f yscope-log-viewer-deployment.yaml -f aws-credentials.yaml
+kubectl apply -f logs-bucket-creation.yaml -f aws-credentials.yaml
 ```
 
 ### Deploy fluent-bit dev container

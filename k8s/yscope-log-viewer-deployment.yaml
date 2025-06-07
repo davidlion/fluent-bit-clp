@@ -1,14 +1,14 @@
 apiVersion: "batch/v1"
 kind: "Job"
 metadata:
-  name: "deploy-yscope-log-viewer"
+  name: "yscope-log-viewer-deployment"
 spec:
   template:
     spec:
       containers:
         # Container to deploy the log viewer. To inspect logs, use the following command:
-        # `kubectl logs job.batch/deploy-yscope-log-viewer`
-        - name: "deploy-yscope-log-viewer"
+        # `kubectl logs job.batch/yscope-log-viewer-deployment`
+        - name: "yscope-log-viewer-deployment"
           image: "amazon/aws-cli:latest"
           command:
             - "/bin/bash"

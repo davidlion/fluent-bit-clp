@@ -8,7 +8,6 @@ import (
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -17,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/smithy-go"
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/y-scope/clp-ffi-go/ffi"
 
@@ -26,6 +24,14 @@ import (
 )
 
 const cPluginName = "out_clp_ir_file"
+
+type customResolver struct{}
+
+func (c customResolver) ResolveEndpoint(service, region string, options ...interface{}) (aws.Endpoint, error) {
+	return aws.Endpoint{
+		URL: os.Getenv("AWS_ENDPOINT_URL"),
+	}, nil
+}
 
 //export FLBPluginRegister
 func FLBPluginRegister(def unsafe.Pointer) int {
@@ -48,115 +54,14 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	return output.FLB_OK
 }
 
-// errorAs is a helper for Go <1.20. For Go 1.20+, you can use errors.As.
-func errorAs(err error, target any) bool {
-	if err == nil {
-		return false
-	}
-	switch t := target.(type) {
-	case **smithy.APIError:
-		apiErr, ok := err.(smithy.APIError)
-		if !ok {
-			return false
-		}
-		*t = &apiErr
-		return true
-	}
-	return false
-}
-
-func bucketExists(client *s3.Client, bucket string) (bool, error) {
-	_, err := client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
-		Bucket: aws.String(bucket),
-	})
-	if err == nil {
-		return true, nil // Bucket exists and is accessible
-	}
-
-	var apiErr smithy.APIError
-	if ok := errorAs(err, &apiErr); ok {
-		code := apiErr.ErrorCode()
-		if code == "NotFound" || code == "404" || code == "NoSuchBucket" {
-			return false, nil // Bucket does not exist
-		}
-		// AccessDenied means the bucket exists but you don't own it (or can't access)
-		if code == "Forbidden" || code == "403" || code == "AccessDenied" {
-			return true, nil // Exists, but not accessible/owned
-		}
-	}
-	return false, err // Unexpected error
-}
-
-func bucketCreateIfNotExist(client *s3.Client, bucket string) error {
-	exists, err := bucketExists(client, bucket)
-	if err != nil {
-		log.Printf("[error] Failed to check if bucket exists: %v", err)
-		return err
-	}
-
-	if exists {
-		log.Print("Bucket already exists:", bucket)
-		return nil
-	}
-
-	createInput := &s3.CreateBucketInput{
-		Bucket: aws.String(bucket),
-	}
-
-	_, err = client.CreateBucket(context.TODO(), createInput)
-	if err != nil {
-		log.Printf("[error] Failed to create bucket: %v", err)
-		return err
-	}
-
-	log.Print("Bucket created successfully:", bucket)
-	return nil
-}
-
-func SetBucketPublicRead(client *s3.Client, bucket string) error {
-	// This policy allows anyone to GetObject from the bucket:
-	policy := map[string]any{
-		"Version": "2012-10-17",
-		"Statement": []map[string]any{
-			{
-				"Effect":    "Allow",
-				"Principal": "*",
-				"Action":    "s3:GetObject",
-				"Resource":  fmt.Sprintf("arn:aws:s3:::%s/*", bucket),
-			},
-		},
-	}
-	policyBytes, err := json.Marshal(policy)
-	if err != nil {
-		return fmt.Errorf("[error] Failed to marshal policy: %w", err)
-	}
-
-	_, err = client.PutBucketPolicy(context.TODO(), &s3.PutBucketPolicyInput{
-		Bucket: aws.String(bucket),
-		Policy: aws.String(string(policyBytes)),
-	})
-	if err != nil {
-		return fmt.Errorf("[error] Failed to set bucket policy: %w", err)
-	}
-
-	log.Print("Bucket policy set to public-read for bucket:", bucket)
-	return nil
-}
-
 func upload(localPath, remotePath string) error {
 	bucket := "logs"
 
 	// Load AWS config from default environment
 	cfg, err := config.LoadDefaultConfig(
 		context.TODO(),
-		config.WithEndpointResolver(
-			aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
-				return aws.Endpoint{
-					URL: os.Getenv("AWS_ENDPOINT_URL"),
-				}, nil
-			}),
-		),
 	)
+
 	if err != nil {
 		log.Printf("[error] Failed to load config: %v", err)
 		return err
@@ -164,16 +69,8 @@ func upload(localPath, remotePath string) error {
 
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = true // Crucial for MinIO!
+		o.BaseEndpoint = aws.String(os.Getenv("AWS_ENDPOINT_URL"))
 	})
-
-	// TODO: fix the problem where the bucket fails to create if it doesn't exist and set bucket
-	// policy to public read.
-	// bucketCreateIfNotExist(client, bucket)
-	// err = SetBucketPublicRead(client, bucket)
-	// if err != nil {
-	// 	log.Printf("[error] Failed to set bucket public: %v", err)
-	// 	return err
-	// }
 
 	// Open the file
 	file, err := os.Open(localPath)
@@ -190,10 +87,6 @@ func upload(localPath, remotePath string) error {
 		Bucket: aws.String(bucket),
 		Key:    aws.String(remotePath),
 		Body:   file,
-
-		// Optional:
-		// ContentType: aws.String("application/zstd"),
-		// ACL:         types.ObjectCannedACLPublicRead,
 	})
 	if err != nil {
 		log.Printf("[error] Failed to upload file, %v", err)
@@ -210,7 +103,7 @@ func upload(localPath, remotePath string) error {
 }
 
 //export FLBPluginFlushCtx
-func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, /* tag */_ *C.char) int {
+func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.char) int {
 	// Gets called with a batch of records to be written to an instance.
 	p := output.FLBPluginGetContext(ctx)
 
