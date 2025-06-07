@@ -46,9 +46,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	return output.FLB_OK
 }
 
-func upload(localPath, remotePath string) error {
-	bucket := "logs"
-
+func upload(bucket, localPath, remotePath string) error {
 	// Load AWS config from default environment
 	cfg, err := config.LoadDefaultConfig(
 		context.TODO(),
@@ -162,7 +160,8 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 	}
 
 	// Upload to s3
-	if err := upload("/tmp/compressed-logs.clp.zstd", "compressed-logs.clp.zst"); err != nil {
+	if err := upload(streamingCompressionContext.LogBucket,
+		"/tmp/compressed-logs.clp.zstd", "compressed-logs.clp.zst"); err != nil {
 		return output.FLB_ERROR
 	}
 
