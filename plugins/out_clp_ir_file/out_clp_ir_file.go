@@ -8,16 +8,12 @@ import (
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"github.com/aws/smithy-go"
 	"log"
 	"os"
 	"time"
 	"unsafe"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/y-scope/clp-ffi-go/ffi"
@@ -49,52 +45,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	return output.FLB_OK
 }
 
-// AWS error codes.
-const (
-	invalidCredsCode  = "InvalidClientTokenId"
-	bucketMissingCode = "NotFound"
-)
-
-func upload(bucket, localPath, remotePath string) error {
-	// Load the aws credentials. [awsConfig.LoadDefaultConfig] will look for credentials in a
-	// specific hierarchy.
-	// https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/
-	cfg, err := config.LoadDefaultConfig(
-		context.TODO(),
-	)
-	if err != nil {
-		log.Printf("[error] Could not load aws credentials: %w", err)
-		return err
-	}
-
-	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.UsePathStyle = true // Crucial for MinIO!
-		o.BaseEndpoint = aws.String(os.Getenv("AWS_ENDPOINT_URL"))
-	})
-
-	// Confirm bucket exists and test aws credentials.
-	_, err = s3Client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
-		Bucket: aws.String(bucket),
-	})
-	if err != nil {
-		// AWS does have some error types that can be checked with [error.As] such as
-		// [s3.NotFound]. However, it can be difficult to always find the appropriate type. As a
-		// result, using aws [smithy-go] to handle error codes.
-		// https://aws.github.io/aws-sdk-go-v2/docs/handling-errors/#api-error-responses
-		var ae smithy.APIError
-		if errors.As(err, &ae) {
-			switch code := ae.ErrorCode(); code {
-			case invalidCredsCode:
-				err = fmt.Errorf("error aws credentials are invalid: %w", err)
-			case bucketMissingCode:
-				err = fmt.Errorf("error bucket %s could not be found: %w", bucket, err)
-			default:
-				err = fmt.Errorf("error aws %s: %w", code, err)
-			}
-		}
-		return err
-	}
-
+func UploadToS3(s3Client *s3.Client, bucket, localPath, remotePath string) error {
 	// Open the file
 	file, err := os.Open(localPath)
 	if err != nil {
@@ -115,12 +66,7 @@ func upload(bucket, localPath, remotePath string) error {
 		log.Printf("[error] Failed to upload file, %v", err)
 		return err
 	}
-
-	if s3Client != nil {
-		log.Print("Successfully uploaded file to", bucket, remotePath)
-	} else {
-		log.Print("[error] Failed to upload file to", bucket, remotePath)
-	}
+	log.Printf("Uploaded " + localPath + " to s3://" + bucket + remotePath)
 
 	return nil
 }
@@ -192,8 +138,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 		return output.FLB_ERROR
 	}
 
-	// Upload to s3
-	if err := upload(streamingCompressionContext.LogBucket,
+	if err := UploadToS3(streamingCompressionContext.S3Client, streamingCompressionContext.LogBucket,
 		"/tmp/compressed-logs.clp.zstd", "compressed-logs.clp.zst"); err != nil {
 		return output.FLB_ERROR
 	}
