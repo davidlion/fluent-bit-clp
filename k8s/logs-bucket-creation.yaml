@@ -41,7 +41,7 @@ data:
   logs-bucket-creation.sh: |-
     #!/usr/bin/env bash
 
-    # Create a bucket and optionally configure ith public read access
+    # Create a bucket and optionally it configure with public read access
     # on a S3-compatible object store such as MinIO
     #
     # Requirements:
