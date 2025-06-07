@@ -25,14 +25,6 @@ import (
 
 const cPluginName = "out_clp_ir_file"
 
-type customResolver struct{}
-
-func (c customResolver) ResolveEndpoint(service, region string, options ...interface{}) (aws.Endpoint, error) {
-	return aws.Endpoint{
-		URL: os.Getenv("AWS_ENDPOINT_URL"),
-	}, nil
-}
-
 //export FLBPluginRegister
 func FLBPluginRegister(def unsafe.Pointer) int {
 	// Gets called only once when the plugin.so is loaded
