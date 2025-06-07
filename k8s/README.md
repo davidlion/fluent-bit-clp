@@ -26,7 +26,7 @@ Follow the guide here: [k3d]
 ```shell
 # Start k8s with 1 server and 1 agent, and mount plugins local directory to the cluster
 k3d cluster create yscope --servers 1 --agents 1 \
-  -v <path to yscope fluent-bit-clp GitHub repo directory>/plugins:/plugins \
+  -v <repo root directory>/prebuilt:/fluent-bit/plugins \
   -p 9000:30000@agent:0 \
   -p 9001:30001@agent:0
 ```
@@ -49,12 +49,12 @@ kubectl exec -it fluent-bit-dev -c fluent-bit-dev -n default -- /bin/bash
 
 # Test log collection
 echo '{"message": "a log message"}' > /tmp/test-0.log
-# Afterwards, /tmp/path.ir.zstd file should be created containing compressed logs
+# Afterwards, /tmp/compressed-logs.clp.zst file should be created containing compressed logs
 
 # Inspect the logs for fluent-bit
 kubectl logs fluent-bit-dev
 # We should get the following
-[2025/05/27 02:35:58] [info] [input:tail:tail.0] inotify_fs_add(): inode=865010 watch_fd=1 name=/tmp/test.log
+[2025/05/27 02:35:58] [info] [input:tail:tail.0] inotify_fs_add(): inode=865010 watch_fd=1 name=/tmp/test-0.log
 2025/05/27 02:36:03 [info] decoder.GetRecord error: EOF
 
 # port forward

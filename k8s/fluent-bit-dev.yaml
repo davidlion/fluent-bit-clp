@@ -13,7 +13,7 @@ spec:
       command:
         - "sh"
         - "-c"
-        - "/fluent-bit/bin/fluent-bit --config /fluent-bit/plugins/out_clp_ir_file/fluent-bit.yaml"
+        - "/fluent-bit/bin/fluent-bit --config /fluent-bit/etc/fluent-bit.yaml"
       env:
         - name: "AWS_ENDPOINT_URL"
           value: "http://minio:9000"
@@ -22,13 +22,18 @@ spec:
       volumeMounts:
         - name: "aws-credentials-volume"
           mountPath: "/root/.aws"
-        - name: "clp-plugin-volume"
+        - name: "config-volume"
+          mountPath: "/fluent-bit/etc"
+        - name: "plugins-volume"
           mountPath: "/fluent-bit/plugins"
       imagePullPolicy: "IfNotPresent"
   volumes:
     - name: "aws-credentials-volume"
       secret:
         secretName: "aws-credentials"
-    - name: "clp-plugin-volume"
+    - name: "config-volume"
+      configMap:
+        name: "fluent-bit-dev-config"
+    - name: "plugins-volume"
       hostPath:
-        path: "/plugins"
+        path: "/fluent-bit/plugins"

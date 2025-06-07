@@ -30,11 +30,11 @@ metadata:
 spec:
   type: "NodePort"
   ports:
-    - port: "9000"
-      nodePort: "30000"
-      name: "9000"
-    - port: "9001"
-      nodePort: "30001"
-      name: "9001"
+    - port: 9000
+      nodePort: 30000
+      name: "api-port"
+    - port: 9001
+      nodePort: 30001
+      name: "console-port"
   selector:
     app: "minio"
