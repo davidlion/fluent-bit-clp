@@ -17,13 +17,11 @@ tasks:
       - "check-yaml"
 
   check-go:
-    # NOTE: golangci-lint does its own caching, so we can omit `sources`.
-    aliases: ["fix-go"]
-    deps:
-      - "venv"
-    cmd: |-
-      "{{.G_LINT_VENV_DIR}}/bin/golangci-lint" run \
-        plugins/...
+    cmds:
+      - task: "lint-go"
+        vars:
+          FMT_FLAGS:
+            - "--diff"
 
   check-yaml:
     aliases: ["fix-yaml"]
@@ -34,8 +32,9 @@ tasks:
         sh: |-
           uv run --project "{{.G_UTILS_YSTDLIB_PY}}" find \
             "{{.ROOT_DIR}}" \
-            --exclude "{{.ROOT_DIR}}/build/**/*" \
-            --exclude "{{.ROOT_DIR}}/tools/**/*" \
+            --exclude "build/**" \
+            --exclude "tools/**" \
+            --exclude "**/.venv/**" \
             --filename "*.yaml" \
             --filename "*.yml"
       SRC_FILES:
@@ -47,6 +46,38 @@ tasks:
         cmd: |-
           . "{{.G_LINT_VENV_DIR}}/bin/activate"
           yamllint --config-file "{{.G_UTILS_CONFIGS_DIR}}/.yamllint.yml" --strict "{{.ITEM}}"
+
+  fix:
+    deps:
+      - "fix-go"
+      - "fix-yaml"
+
+  fix-go:
+    # NOTE: We omit `--fix` from RUN_FLAGS until we determine which golangci-lint fixes can be
+    # applied safely.
+    deps:
+      - "venv"
+    cmds:
+      - task: "lint-go"
+
+  lint-go:
+    # NOTE: golangci-lint does its own caching, so we can omit `sources`.
+    internal: true
+    deps:
+      - "venv"
+    cmd: |-
+      "{{.G_LINT_VENV_DIR}}/bin/golangci-lint" fmt \
+        {{- range .FMT_FLAGS}}
+          "{{.}}" \
+        {{- end}}
+        internal/... \
+        plugins/...
+      "{{.G_LINT_VENV_DIR}}/bin/golangci-lint" run \
+        {{- range .RUN_FLAGS}}
+          "{{.}}" \
+        {{- end}}
+        internal/... \
+        plugins/...
 
   venv:
     internal: true

@@ -5,6 +5,9 @@ package flush
 
 import (
 	"C"
+)
+
+import (
 	"encoding/json"
 	"fmt"
 	"io"

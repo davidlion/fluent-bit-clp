@@ -4,7 +4,6 @@ import (
 	"C"
 )
 
-// TODO: gci seems to break on these imports
 import (
 	"context"
 	"encoding/json"

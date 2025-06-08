@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"os"
+	"unsafe"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -11,9 +15,6 @@ import (
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/klauspost/compress/zstd"
 	"github.com/y-scope/clp-ffi-go/ir"
-	"log"
-	"os"
-	"unsafe"
 )
 
 type StreamingCompressionContext struct {
@@ -94,7 +95,7 @@ func NewStreamingCompressionContext(plugin unsafe.Pointer) (*StreamingCompressio
 	}
 	log.Printf("Logs are configured to be uploaded to s3://" + logBucket)
 
-	file, err := os.OpenFile("/tmp/compressed-logs.clp.zstd", os.O_WRONLY|os.O_CREATE, 0660)
+	file, err := os.OpenFile("/tmp/compressed-logs.clp.zstd", os.O_WRONLY|os.O_CREATE, 0o660)
 	if nil != err {
 		return nil, fmt.Errorf("os.Create: %v", err)
 	}

@@ -16,6 +16,9 @@ package decoder
 
 import (
 	"C"
+)
+
+import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"

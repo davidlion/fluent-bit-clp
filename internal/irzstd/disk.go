@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/klauspost/compress/zstd"
-
 	"github.com/y-scope/clp-ffi-go/ffi"
 	"github.com/y-scope/clp-ffi-go/ir"
 )
