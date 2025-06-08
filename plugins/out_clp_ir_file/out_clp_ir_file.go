@@ -6,6 +6,7 @@ import (
 
 import (
 	"encoding/json"
+	"github.com/y-scope/fluent-bit-clp/plugins/out_clp_ir_file/internal"
 	"log"
 	"time"
 	"unsafe"
@@ -27,7 +28,7 @@ func FLBPluginRegister(def unsafe.Pointer) int {
 //export FLBPluginInit
 func FLBPluginInit(plugin unsafe.Pointer) int {
 	// Gets called only once for each instance you have configured.
-	outCtx, err := NewContext(plugin)
+	outCtx, err := internal.NewContext(plugin)
 	if err != nil {
 		log.Printf("[error] Failed to initialize plugin: %s", err)
 		return output.FLB_ERROR
@@ -44,7 +45,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 	// Gets called with a batch of records to be written to an instance.
 	p := output.FLBPluginGetContext(ctx)
 
-	pluginCtx, ok := p.(*Context)
+	pluginCtx, ok := p.(*internal.Context)
 	if !ok {
 		log.Println("Could not read context during flush")
 		return output.FLB_ERROR
@@ -124,7 +125,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 func FLBPluginExitCtx(ctx unsafe.Pointer) int {
 	p := output.FLBPluginGetContext(ctx)
 
-	pluginCtx, ok := p.(*Context)
+	pluginCtx, ok := p.(*internal.Context)
 	if !ok {
 		log.Printf("[error] could not read context during flush")
 		return output.FLB_ERROR
