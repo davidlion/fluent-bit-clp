@@ -26,7 +26,6 @@ linters:
   enable:
     - "errorlint"
     - "exhaustive"
-    - "exhaustruct"
     - "gocritic"
     - "gosec"
     - "govet"

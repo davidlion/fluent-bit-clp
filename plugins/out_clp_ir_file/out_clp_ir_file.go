@@ -21,12 +21,12 @@ import (
 	"github.com/y-scope/fluent-bit-clp/internal/outctx2"
 )
 
-const cPluginName = "out_clp_ir_file"
+const PluginName = "out_clp_ir_file"
 
 //export FLBPluginRegister
 func FLBPluginRegister(def unsafe.Pointer) int {
 	// Gets called only once when the plugin.so is loaded
-	return output.FLBPluginRegister(def, cPluginName, "CLP IR file output plugin")
+	return output.FLBPluginRegister(def, PluginName, "CLP IR file output plugin")
 }
 
 //export FLBPluginInit
@@ -65,7 +65,7 @@ func UploadToS3(s3Client *s3.Client, bucket, localPath, remotePath string) error
 		log.Printf("[error] Failed to upload file, %v", err)
 		return err
 	}
-	log.Printf("Uploaded " + localPath + " to s3://" + bucket + remotePath)
+	log.Printf("Uploaded %v to s3://%v%v", localPath, bucket, remotePath)
 
 	return nil
 }
@@ -84,6 +84,10 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 	// Decode logs from fluent bit and write to IR.
 	irWriter := streamingCompressionContext.IRWriter
 	dec := decoder.New(data, int(length))
+	// TODO: tracking variables if you want to update timers once at the end based on the highest
+	// log level seen and last timestamp
+	var lastTimestamp time.Time
+	var maxLogLevel int
 	for {
 		flbTimestamp, jsonRecord, err := decoder.GetRecord(dec)
 		if err != nil {
@@ -91,15 +95,15 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 			break
 		}
 
-		var timestamp int64
+		var timestamp time.Time
 		switch t := flbTimestamp.(type) {
 		case decoder.FlbTime:
-			timestamp = t.UnixMilli()
+			timestamp = t.Time
 		case uint64:
-			timestamp = int64(t)
+			timestamp = time.UnixMilli(int64(t))
 		default:
 			log.Printf("time provided invalid, defaulting to now. Invalid type is %T", t)
-			timestamp = time.Now().UnixMilli()
+			timestamp = time.Now()
 		}
 
 		var userKvPairs map[string]any
@@ -110,14 +114,44 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 		}
 
 		event := ffi.NewLogEvent()
-		event.AutoKvPairs["timestamp"] = timestamp
+		event.AutoKvPairs["timestamp"] = timestamp.UnixMilli()
 		event.UserKvPairs = userKvPairs
 		_, err = irWriter.WriteLogEvent(*event)
 		if nil != err {
 			log.Printf("[error] ir.Writer.WriteLogEvent failed: %v", err)
 			return output.FLB_ERROR
 		}
+
+		// TODO: update to use enum
+		// TODO: parse/handle the log level found
+		var level int
+		switch userKvPairs["LogLevel"] {
+		case "debug":
+			level = 0
+		case "info":
+			level = 1
+		case "warn":
+			level = 2
+		case "error":
+			level = 3
+		case "fatal":
+			level = 4
+		}
+
+		// TODO: if you want to update on each log
+		// streamingCompressionContext.TimeoutManager.Update(level, timestamp)
+
+		// TODO: if you want to update once update tracking variables
+		if maxLogLevel < level {
+			maxLogLevel = level
+		}
+		if timestamp.After(lastTimestamp) {
+			lastTimestamp = timestamp
+		}
 	}
+
+	// TODO: if you want to update once update tracking variables
+	streamingCompressionContext.TimeoutManager.Update(maxLogLevel, lastTimestamp)
 
 	// // Flush if necessary
 	// lastFlushTimestamp := streamingCompressionContext.LastFlushTimestamp
@@ -137,8 +171,12 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 		return output.FLB_ERROR
 	}
 
-	if err := UploadToS3(streamingCompressionContext.S3Client, streamingCompressionContext.LogBucket,
-		"/tmp/compressed-logs.clp.zstd", "compressed-logs.clp.zst"); err != nil {
+	if err := UploadToS3(
+		streamingCompressionContext.S3Client,
+		streamingCompressionContext.LogBucket,
+		"/tmp/compressed-logs.clp.zstd",
+		"compressed-logs.clp.zst",
+	); err != nil {
 		return output.FLB_ERROR
 	}
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 	"unsafe"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -15,6 +16,8 @@ import (
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/klauspost/compress/zstd"
 	"github.com/y-scope/clp-ffi-go/ir"
+
+	"github.com/y-scope/fluent-bit-clp/internal/timeout"
 )
 
 type StreamingCompressionContext struct {
@@ -24,6 +27,7 @@ type StreamingCompressionContext struct {
 	S3Client           *s3.Client
 	LogBucket          string
 	LastFlushTimestamp int64
+	TimeoutManager     timeout.Manager
 }
 
 func CreateS3Client() (*s3.Client, error) {
@@ -34,8 +38,7 @@ func CreateS3Client() (*s3.Client, error) {
 		context.TODO(),
 	)
 	if err != nil {
-		log.Printf("[error] Could not load aws credentials: %w", err)
-		return nil, err
+		return nil, fmt.Errorf("could not load aws credentials: %w", err)
 	}
 
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
@@ -53,12 +56,13 @@ const (
 )
 
 func ValidateLogBucket(s3Client *s3.Client, logBucket string) error {
-	log.Printf("The upload bucket for logs: " + logBucket)
+	log.Printf("The upload bucket for logs: %v", logBucket)
 
 	// Confirm bucket exists and test aws credentials.
-	_, err := s3Client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
-		Bucket: aws.String(logBucket),
-	})
+	_, err := s3Client.HeadBucket(
+		context.TODO(),
+		&s3.HeadBucketInput{Bucket: aws.String(logBucket), ExpectedBucketOwner: nil},
+	)
 	if err != nil {
 		// AWS does have some error types that can be checked with [error.As] such as
 		// [s3.NotFound]. However, it can be difficult to always find the appropriate type. As a
@@ -80,6 +84,8 @@ func ValidateLogBucket(s3Client *s3.Client, logBucket string) error {
 	return nil
 }
 
+const defaultFilePerm = 0o600
+
 func NewStreamingCompressionContext(plugin unsafe.Pointer) (*StreamingCompressionContext, error) {
 	// Create S3 client
 	s3Client, err := CreateS3Client()
@@ -93,18 +99,55 @@ func NewStreamingCompressionContext(plugin unsafe.Pointer) (*StreamingCompressio
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Logs are configured to be uploaded to s3://" + logBucket)
+	log.Printf("Logs are configured to be uploaded to s3:// %v", logBucket)
 
-	file, err := os.OpenFile("/tmp/compressed-logs.clp.zstd", os.O_WRONLY|os.O_CREATE, 0o660)
+	file, err := os.OpenFile(
+		"/tmp/compressed-logs.clp.zstd",
+		os.O_WRONLY|os.O_CREATE,
+		defaultFilePerm,
+	)
 	if nil != err {
-		return nil, fmt.Errorf("os.Create: %v", err)
+		return nil, fmt.Errorf("os.Create: %w", err)
 	}
 
 	zstdWriter, err := zstd.NewWriter(file)
 	if nil != err {
-		return nil, fmt.Errorf("zstd.NewWriter: %v", err)
+		return nil, fmt.Errorf("zstd.NewWriter: %w", err)
 	}
+
 	irWriter, err := ir.NewWriter[ir.FourByteEncoding](zstdWriter)
+	if nil != err {
+		return nil, fmt.Errorf("ir.NewWriter: %w", err)
+	}
+
+	// All the times are taken from:
+	// https://github.com/y-scope/clp-loglib-py/blob/main/src/clp_logging/handlers.py#L185
+	// TODO: update to use enum
+	timeoutManager, err := timeout.NewManager(
+		[]time.Duration{
+			30 * time.Minute, // DEBUG
+			30 * time.Minute, // INFO
+			10 * time.Minute, // WARN
+			5 * time.Minute,  // ERROR
+			5 * time.Minute,  // FATAL
+		},
+		[]time.Duration{
+			3 * time.Minute,       // DEBUG
+			3 * time.Minute,       // INFO
+			15 * time.Millisecond, // WARN
+			10 * time.Millisecond, // ERROR
+			5 * time.Millisecond,  // FATAL
+		},
+		0,
+		func() {
+			if err := zstdWriter.Flush(); err != nil {
+				log.Printf("timeout flush failed because zstdWriter.Flush failed: %v", err)
+			}
+		},
+	)
+	if nil != err {
+		return nil, fmt.Errorf("timeout.NewManager: %w", err)
+	}
 
 	ctx := StreamingCompressionContext{
 		File:               file,
@@ -113,7 +156,7 @@ func NewStreamingCompressionContext(plugin unsafe.Pointer) (*StreamingCompressio
 		S3Client:           s3Client,
 		LogBucket:          logBucket,
 		LastFlushTimestamp: 0,
+		TimeoutManager:     timeoutManager,
 	}
-
 	return &ctx, nil
 }
