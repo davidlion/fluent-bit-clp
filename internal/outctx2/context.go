@@ -21,13 +21,12 @@ import (
 )
 
 type StreamingCompressionContext struct {
-	File               *os.File
-	ZstdWriter         *zstd.Encoder
-	IRWriter           *ir.Writer
-	S3Client           *s3.Client
-	LogBucket          string
-	LastFlushTimestamp int64
-	TimeoutManager     timeout.Manager
+	File           *os.File
+	ZstdWriter     *zstd.Encoder
+	IRWriter       *ir.Writer
+	S3Client       *s3.Client
+	LogBucket      string
+	TimeoutManager timeout.Manager
 }
 
 func CreateS3Client() (*s3.Client, error) {
@@ -84,6 +83,32 @@ func ValidateLogBucket(s3Client *s3.Client, logBucket string) error {
 	return nil
 }
 
+func UploadToS3(s3Client *s3.Client, bucket, localPath, remotePath string) error {
+	// Open the file
+	file, err := os.Open(localPath)
+	if err != nil {
+		log.Printf("[error] Failed to open file %q, %v", localPath, err)
+		return err
+	}
+	defer file.Close()
+
+	log.Println("Opened file:", localPath)
+
+	// Upload file to path
+	_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(remotePath),
+		Body:   file,
+	})
+	if err != nil {
+		log.Printf("[error] Failed to upload file, %v", err)
+		return err
+	}
+	log.Printf("Uploaded %v to s3://%v%v", localPath, bucket, remotePath)
+
+	return nil
+}
+
 const defaultFilePerm = 0o600
 
 func NewStreamingCompressionContext(plugin unsafe.Pointer) (*StreamingCompressionContext, error) {
@@ -132,16 +157,25 @@ func NewStreamingCompressionContext(plugin unsafe.Pointer) (*StreamingCompressio
 			5 * time.Minute,  // FATAL
 		},
 		[]time.Duration{
-			3 * time.Minute,       // DEBUG
-			3 * time.Minute,       // INFO
-			15 * time.Millisecond, // WARN
-			10 * time.Millisecond, // ERROR
-			5 * time.Millisecond,  // FATAL
+			3 * time.Minute,  // DEBUG
+			3 * time.Minute,  // INFO
+			15 * time.Second, // WARN
+			10 * time.Second, // ERROR
+			5 * time.Second,  // FATAL
 		},
 		0,
 		func() {
 			if err := zstdWriter.Flush(); err != nil {
 				log.Printf("timeout flush failed because zstdWriter.Flush failed: %v", err)
+			}
+
+			if err := UploadToS3(
+				s3Client,
+				logBucket,
+				"/tmp/compressed-logs.clp.zstd",
+				"compressed-logs.clp.zst",
+			); err != nil {
+				log.Printf("Failed to upload to S3")
 			}
 		},
 	)
@@ -150,13 +184,12 @@ func NewStreamingCompressionContext(plugin unsafe.Pointer) (*StreamingCompressio
 	}
 
 	ctx := StreamingCompressionContext{
-		File:               file,
-		ZstdWriter:         zstdWriter,
-		IRWriter:           irWriter,
-		S3Client:           s3Client,
-		LogBucket:          logBucket,
-		LastFlushTimestamp: 0,
-		TimeoutManager:     timeoutManager,
+		File:           file,
+		ZstdWriter:     zstdWriter,
+		IRWriter:       irWriter,
+		S3Client:       s3Client,
+		LogBucket:      logBucket,
+		TimeoutManager: timeoutManager,
 	}
 	return &ctx, nil
 }

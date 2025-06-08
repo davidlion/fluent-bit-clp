@@ -5,15 +5,11 @@ import (
 )
 
 import (
-	"context"
 	"encoding/json"
 	"log"
-	"os"
 	"time"
 	"unsafe"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/y-scope/clp-ffi-go/ffi"
 
@@ -42,32 +38,6 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	output.FLBPluginSetContext(plugin, outCtx)
 
 	return output.FLB_OK
-}
-
-func UploadToS3(s3Client *s3.Client, bucket, localPath, remotePath string) error {
-	// Open the file
-	file, err := os.Open(localPath)
-	if err != nil {
-		log.Printf("[error] Failed to open file %q, %v", localPath, err)
-		return err
-	}
-	defer file.Close()
-
-	log.Println("Opened file:", localPath)
-
-	// Upload file to path
-	_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(remotePath),
-		Body:   file,
-	})
-	if err != nil {
-		log.Printf("[error] Failed to upload file, %v", err)
-		return err
-	}
-	log.Printf("Uploaded %v to s3://%v%v", localPath, bucket, remotePath)
-
-	return nil
 }
 
 //export FLBPluginFlushCtx
@@ -138,10 +108,6 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 			level = 4
 		}
 
-		// TODO: if you want to update on each log
-		// streamingCompressionContext.TimeoutManager.Update(level, timestamp)
-
-		// TODO: if you want to update once update tracking variables
 		if maxLogLevel < level {
 			maxLogLevel = level
 		}
@@ -150,35 +116,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 		}
 	}
 
-	// TODO: if you want to update once update tracking variables
 	streamingCompressionContext.TimeoutManager.Update(maxLogLevel, lastTimestamp)
-
-	// // Flush if necessary
-	// lastFlushTimestamp := streamingCompressionContext.LastFlushTimestamp
-	// currentTime := time.Now().UnixMilli()
-	// if currentTime-lastFlushTimestamp > 60 {
-	// 	err := streamingCompressionContext.ZstdWriter.Flush()
-	// 	if err != nil {
-	// 		return 0
-	// 	}
-	// 	streamingCompressionContext.LastFlushTimestamp = currentTime
-
-	// 	// Upload to s3
-	// 	upload("/tmp/path.ir.zstd", "compressed-logs.clp.zst")
-	// }
-
-	if err := streamingCompressionContext.ZstdWriter.Flush(); err != nil {
-		return output.FLB_ERROR
-	}
-
-	if err := UploadToS3(
-		streamingCompressionContext.S3Client,
-		streamingCompressionContext.LogBucket,
-		"/tmp/compressed-logs.clp.zstd",
-		"compressed-logs.clp.zst",
-	); err != nil {
-		return output.FLB_ERROR
-	}
 
 	return output.FLB_OK
 }
