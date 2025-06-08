@@ -24,6 +24,7 @@ tasks:
     requires:
       vars: ["PLUGIN_NAME"]
     sources:
+      - "{{.ROOT_DIR}}/internal/**/*.go"
       - "{{.SRC_DIR}}/**/*.go"
     generates:
       - "{{.INSTALL_PREFIX}}.h"
