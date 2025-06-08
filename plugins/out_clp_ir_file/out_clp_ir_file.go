@@ -28,7 +28,7 @@ func FLBPluginRegister(def unsafe.Pointer) int {
 //export FLBPluginInit
 func FLBPluginInit(plugin unsafe.Pointer) int {
 	// Gets called only once for each instance you have configured.
-	outCtx, err := outctx2.NewStreamingCompressionContext(plugin)
+	outCtx, err := outctx2.NewPluginContext(plugin)
 	if err != nil {
 		log.Printf("[error] Failed to initialize plugin: %s", err)
 		return output.FLB_ERROR
@@ -116,7 +116,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 		}
 	}
 
-	pluginCtx.TimeoutManager.Update(maxLogLevel, lastTimestamp)
+	pluginCtx.Flush.Update(maxLogLevel, lastTimestamp)
 
 	return output.FLB_OK
 }
