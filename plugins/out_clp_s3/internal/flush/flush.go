@@ -3,9 +3,7 @@
 
 package flush
 
-import (
-	"C"
-)
+import "C"
 
 import (
 	"encoding/json"

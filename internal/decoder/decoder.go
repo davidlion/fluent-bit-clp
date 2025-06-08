@@ -14,9 +14,7 @@
 // [aws firehose plugin]: https://github.com/aws/amazon-kinesis-firehose-for-fluent-bit/blob/dcbe1a0191abd6242182af55547ccf99ee650ce9/plugins/plugins.go#L153
 package decoder
 
-import (
-	"C"
-)
+import "C"
 
 import (
 	"encoding/binary"
