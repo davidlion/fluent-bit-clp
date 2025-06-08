@@ -14,7 +14,6 @@ import (
 	"github.com/y-scope/clp-ffi-go/ffi"
 
 	"github.com/y-scope/fluent-bit-clp/internal/decoder"
-	"github.com/y-scope/fluent-bit-clp/internal/outctx2"
 )
 
 const PluginName = "out_clp_ir_file"
@@ -28,7 +27,7 @@ func FLBPluginRegister(def unsafe.Pointer) int {
 //export FLBPluginInit
 func FLBPluginInit(plugin unsafe.Pointer) int {
 	// Gets called only once for each instance you have configured.
-	outCtx, err := outctx2.NewPluginContext(plugin)
+	outCtx, err := NewContext(plugin)
 	if err != nil {
 		log.Printf("[error] Failed to initialize plugin: %s", err)
 		return output.FLB_ERROR
@@ -45,7 +44,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 	// Gets called with a batch of records to be written to an instance.
 	p := output.FLBPluginGetContext(ctx)
 
-	pluginCtx, ok := p.(*outctx2.PluginCtx)
+	pluginCtx, ok := p.(*Context)
 	if !ok {
 		log.Println("Could not read context during flush")
 		return output.FLB_ERROR
@@ -125,7 +124,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 func FLBPluginExitCtx(ctx unsafe.Pointer) int {
 	p := output.FLBPluginGetContext(ctx)
 
-	pluginCtx, ok := p.(*outctx2.PluginCtx)
+	pluginCtx, ok := p.(*Context)
 	if !ok {
 		log.Printf("[error] could not read context during flush")
 		return output.FLB_ERROR

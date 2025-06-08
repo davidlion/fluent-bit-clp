@@ -1,23 +1,22 @@
-package outctx2
+package main
 
 import (
 	"fmt"
-	"github.com/y-scope/fluent-bit-clp/internal/compression"
-	"github.com/y-scope/fluent-bit-clp/internal/s3"
+	"github.com/y-scope/fluent-bit-clp/plugins/out_clp_ir_file/internal/compression"
+	"github.com/y-scope/fluent-bit-clp/plugins/out_clp_ir_file/internal/flush"
+	"github.com/y-scope/fluent-bit-clp/plugins/out_clp_ir_file/internal/s3"
 	"log"
 	"time"
 	"unsafe"
-
-	"github.com/y-scope/fluent-bit-clp/internal/flush"
 )
 
-type PluginCtx struct {
+type Context struct {
 	Compression compression.Context
 	S3          s3.Context
 	Flush       flush.Manager
 }
 
-func NewPluginContext(plugin unsafe.Pointer) (*PluginCtx, error) {
+func NewContext(plugin unsafe.Pointer) (*Context, error) {
 	s3Ctx, err := s3.NewContext(plugin)
 	if err != nil {
 		log.Printf("[error] Failed to create s3 context")
@@ -55,7 +54,7 @@ func NewPluginContext(plugin unsafe.Pointer) (*PluginCtx, error) {
 			if err := s3.UploadToS3(
 				s3Ctx.Client, s3Ctx.Bucket,
 				"/tmp/compressed-logs.clp.zstd",
-				"compressed-logs.clp.zst",
+				"/compressed-logs.clp.zst",
 			); err != nil {
 				log.Printf("Failed to upload to S3")
 			}
@@ -65,7 +64,7 @@ func NewPluginContext(plugin unsafe.Pointer) (*PluginCtx, error) {
 		return nil, fmt.Errorf("flush.NewManager: %w", err)
 	}
 
-	ctx := PluginCtx{
+	ctx := Context{
 		Compression: *compressionCtx,
 		S3:          *s3Ctx,
 		Flush:       flushManager,
