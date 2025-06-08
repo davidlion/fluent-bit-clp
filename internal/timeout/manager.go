@@ -15,11 +15,11 @@ type Manager interface {
 type manager struct {
 	defaultLogLevel int
 	hardDeltas      []time.Duration
-	hardTimer       time.Timer
+	hardTimer       *time.Timer
 	hardTimeout     time.Time
 	softDelta       time.Duration
 	softDeltas      []time.Duration
-	softTimer       time.Timer
+	softTimer       *time.Timer
 	userCallback    func()
 	mutex           sync.Mutex
 }
@@ -38,7 +38,9 @@ func NewManager(
 	}
 	return &manager{
 		hardDeltas:      hardDeltas,
+		hardTimer:       time.NewTimer(0),
 		softDeltas:      softDeltas,
+		softTimer:       time.NewTimer(0),
 		defaultLogLevel: defaultLogLevel,
 		userCallback:    userCallback,
 	}, nil
@@ -74,7 +76,7 @@ func (m *manager) Update(level int, timestamp time.Time) {
 	nextHardTimeout := timestamp.Add(hardDelta)
 	if nextHardTimeout.IsZero() || nextHardTimeout.Before(m.hardTimeout) {
 		m.hardTimer.Stop()
-		m.hardTimer = *time.AfterFunc(
+		m.hardTimer = time.AfterFunc(
 			time.Until(nextHardTimeout),
 			m.callback,
 		)
@@ -98,7 +100,7 @@ func (m *manager) Update(level int, timestamp time.Time) {
 	}
 	nextSoftTimeout := timestamp.Add(softDelta)
 	m.softTimer.Stop()
-	m.softTimer = *time.AfterFunc(
+	m.softTimer = time.AfterFunc(
 		time.Until(nextSoftTimeout),
 		m.callback,
 	)
