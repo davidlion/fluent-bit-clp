@@ -20,12 +20,20 @@ import (
 	"github.com/y-scope/fluent-bit-clp/internal/timeout"
 )
 
-type StreamingCompressionContext struct {
-	File           *os.File
-	ZstdWriter     *zstd.Encoder
-	IRWriter       *ir.Writer
-	S3Client       *s3.Client
-	LogBucket      string
+type CompressionCtx struct {
+	File       *os.File
+	ZstdWriter *zstd.Encoder
+	IRWriter   *ir.Writer
+}
+
+type S3Ctx struct {
+	Client *s3.Client
+	Bucket string
+}
+
+type PluginCtx struct {
+	Compression    CompressionCtx
+	S3             S3Ctx
 	TimeoutManager timeout.Manager
 }
 
@@ -111,7 +119,7 @@ func UploadToS3(s3Client *s3.Client, bucket, localPath, remotePath string) error
 
 const defaultFilePerm = 0o600
 
-func NewStreamingCompressionContext(plugin unsafe.Pointer) (*StreamingCompressionContext, error) {
+func NewStreamingCompressionContext(plugin unsafe.Pointer) (*PluginCtx, error) {
 	// Create S3 client
 	s3Client, err := CreateS3Client()
 	if err != nil {
@@ -150,18 +158,18 @@ func NewStreamingCompressionContext(plugin unsafe.Pointer) (*StreamingCompressio
 	// TODO: update to use enum
 	timeoutManager, err := timeout.NewManager(
 		[]time.Duration{
-			30 * time.Minute, // DEBUG
-			30 * time.Minute, // INFO
-			10 * time.Minute, // WARN
-			5 * time.Minute,  // ERROR
-			5 * time.Minute,  // FATAL
+			3 * time.Second, // DEBUG
+			3 * time.Second, // INFO
+			3 * time.Second, // WARN
+			3 * time.Second, // ERROR
+			3 * time.Second, // FATAL
 		},
 		[]time.Duration{
-			3 * time.Minute,  // DEBUG
-			3 * time.Minute,  // INFO
-			15 * time.Second, // WARN
-			10 * time.Second, // ERROR
-			5 * time.Second,  // FATAL
+			3 * time.Second, // DEBUG
+			3 * time.Second, // INFO
+			3 * time.Second, // WARN
+			3 * time.Second, // ERROR
+			3 * time.Second, // FATAL
 		},
 		0,
 		func() {
@@ -183,12 +191,16 @@ func NewStreamingCompressionContext(plugin unsafe.Pointer) (*StreamingCompressio
 		return nil, fmt.Errorf("timeout.NewManager: %w", err)
 	}
 
-	ctx := StreamingCompressionContext{
-		File:           file,
-		ZstdWriter:     zstdWriter,
-		IRWriter:       irWriter,
-		S3Client:       s3Client,
-		LogBucket:      logBucket,
+	ctx := PluginCtx{
+		Compression: CompressionCtx{
+			File:       file,
+			ZstdWriter: zstdWriter,
+			IRWriter:   irWriter,
+		},
+		S3: S3Ctx{
+			Client: s3Client,
+			Bucket: logBucket,
+		},
 		TimeoutManager: timeoutManager,
 	}
 	return &ctx, nil

@@ -45,14 +45,14 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 	// Gets called with a batch of records to be written to an instance.
 	p := output.FLBPluginGetContext(ctx)
 
-	streamingCompressionContext, ok := p.(*outctx2.StreamingCompressionContext)
+	pluginCtx, ok := p.(*outctx2.PluginCtx)
 	if !ok {
 		log.Println("Could not read context during flush")
 		return output.FLB_ERROR
 	}
 
 	// Decode logs from fluent bit and write to IR.
-	irWriter := streamingCompressionContext.IRWriter
+	irWriter := pluginCtx.Compression.IRWriter
 	dec := decoder.New(data, int(length))
 	// TODO: tracking variables if you want to update timers once at the end based on the highest
 	// log level seen and last timestamp
@@ -116,7 +116,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 		}
 	}
 
-	streamingCompressionContext.TimeoutManager.Update(maxLogLevel, lastTimestamp)
+	pluginCtx.TimeoutManager.Update(maxLogLevel, lastTimestamp)
 
 	return output.FLB_OK
 }
@@ -125,13 +125,13 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 func FLBPluginExitCtx(ctx unsafe.Pointer) int {
 	p := output.FLBPluginGetContext(ctx)
 
-	outCtx2, ok := p.(*outctx2.StreamingCompressionContext)
+	pluginCtx, ok := p.(*outctx2.PluginCtx)
 	if !ok {
 		log.Printf("[error] could not read context during flush")
 		return output.FLB_ERROR
 	}
 
-	irWriter := outCtx2.IRWriter
+	irWriter := pluginCtx.Compression.IRWriter
 
 	// Cleanup the writers (move to FLBPluginExitCtx).
 	err := irWriter.Close()
@@ -140,7 +140,7 @@ func FLBPluginExitCtx(ctx unsafe.Pointer) int {
 		return output.FLB_ERROR
 	}
 
-	zstdWriter := outCtx2.ZstdWriter
+	zstdWriter := pluginCtx.Compression.ZstdWriter
 	zstdWriter.Close()
 
 	return output.FLB_OK
