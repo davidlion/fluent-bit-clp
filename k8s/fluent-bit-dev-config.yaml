@@ -33,5 +33,4 @@ data:
       outputs:
         - name: "out_clp_ir_file"
           match: "*"
-          line_format: "json"
           log_bucket: "logs"
