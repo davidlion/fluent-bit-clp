@@ -1,7 +1,7 @@
 apiVersion: "v1"
 kind: "ConfigMap"
 metadata:
-  name: "fluent-bit-dev-config"
+  name: "fluent-bit-daemonset-config"
 data:
   fluent-bit.yaml: |
     plugins:
@@ -15,7 +15,7 @@ data:
     pipeline:
       inputs:
         - name: "tail"
-          path: "/tmp/test-*.log"
+          path: "/var/log/test-*.log"
           path_key: "file_path"
           tag: "michelangelo_logs"
           # The interval of refreshing the list of watched files in seconds
@@ -32,5 +32,5 @@ data:
 
       outputs:
         - name: "out_clp_ir_file"
-          match: "*"
+          match: "michelangelo_logs"
           log_bucket: "logs"

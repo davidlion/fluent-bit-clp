@@ -63,6 +63,29 @@ kubectl port-forward minio 9000:9000
 ```
 
 #### Fluent-bit-daemonset
+```shell
+# Create fluent-bit service account
+kubectl create serviceaccount fluent-bit
+
+# Fluent-bit configs are in the yaml file
+kubectl apply -f fluent-bit-daemonset.yaml -f fluent-bit-daemonset-config.yaml -f aws-credentials.yaml -f ubuntu.yaml
+
+# To launch a shell into the fluent-bit container
+kubectl exec -it ubuntu -n default -- /bin/bash
+
+# Test log collection
+echo '{"message": "a log message"}' > /var/log/test-0.log
+# Afterwards, /tmp/compressed-logs.clp.zst file should be created containing compressed logs
+
+# Inspect the logs for fluent-bit
+kubectl logs fluent-bit-sidecar -c fluent-bit-sidecar
+# We should get the following
+[2025/05/27 02:35:58] [info] [input:tail:tail.0] inotify_fs_add(): inode=865010 watch_fd=1 name=/tmp/test-0.log
+2025/05/27 02:36:03 [info] decoder.GetRecord error: EOF
+
+# port forward
+kubectl port-forward minio 9000:9000
+```
 
 
 ### Delete cluster
