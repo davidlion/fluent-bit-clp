@@ -16,8 +16,13 @@ func CreateS3Client() (*s3.Client, error) {
 	// Load the aws credentials. [awsConfig.LoadDefaultConfig] will look for credentials in a
 	// specific hierarchy.
 	// https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/
+	awsRegion := os.Getenv("AWS_REGION")
+	if awsRegion == "" {
+		awsRegion = "us-west-1"
+	}
 	cfg, err := config.LoadDefaultConfig(
 		context.TODO(),
+		config.WithRegion(awsRegion), // Crucial for MinIO!
 	)
 	if err != nil {
 		return nil, fmt.Errorf("could not load aws credentials: %w", err)
@@ -38,8 +43,6 @@ const (
 )
 
 func ValidateLogBucket(s3Client *s3.Client, logBucket string) error {
-	log.Printf("The upload bucket for logs: %v", logBucket)
-
 	// Confirm bucket exists and test aws credentials.
 	_, err := s3Client.HeadBucket(
 		context.TODO(),
@@ -75,8 +78,6 @@ func UploadToS3(s3Client *s3.Client, bucket, localPath, remotePath string) error
 	}
 	defer file.Close()
 
-	log.Println("Opened file:", localPath)
-
 	// Upload file to path
 	_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
@@ -87,7 +88,7 @@ func UploadToS3(s3Client *s3.Client, bucket, localPath, remotePath string) error
 		log.Printf("[error] Failed to upload file, %v", err)
 		return err
 	}
-	log.Printf("Uploaded %v to s3://%v%v", localPath, bucket, remotePath)
+	log.Printf("[info] Uploaded %v to s3://%v%v", localPath, bucket, remotePath)
 
 	return nil
 }

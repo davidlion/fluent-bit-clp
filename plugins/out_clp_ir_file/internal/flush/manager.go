@@ -67,7 +67,7 @@ func (m *manager) Update(level int, timestamp time.Time) {
 	} else {
 		hardDelta = m.hardDeltas[m.defaultLogLevel]
 		log.Printf(
-			"[warn] no hard flush delta found for log level %v; defaulting to level %v (%v).",
+			"[warn] No hard flush delta found for log level %v; defaulting to level %v (%v).",
 			level,
 			m.defaultLogLevel,
 			hardDelta,
@@ -89,7 +89,7 @@ func (m *manager) Update(level int, timestamp time.Time) {
 	} else {
 		softDelta = m.softDeltas[m.defaultLogLevel]
 		log.Printf(
-			"[warn] no soft flush delta found for log level %v; defaulting to level %v (%v).",
+			"[warn] No soft flush delta found for log level %v; defaulting to level %v (%v).",
 			level,
 			m.defaultLogLevel,
 			softDelta,

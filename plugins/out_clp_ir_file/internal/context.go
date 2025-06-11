@@ -48,7 +48,7 @@ func NewContext(plugin unsafe.Pointer) (*Context, error) {
 		0,
 		func() {
 			if err := compressionCtx.ZstdWriter.Flush(); err != nil {
-				log.Printf("flush flush failed because zstdWriter.Flush failed: %v", err)
+				log.Printf("[error] Flush failed because zstdWriter.Flush failed: %v", err)
 			}
 
 			if err := s3.UploadToS3(
@@ -56,7 +56,7 @@ func NewContext(plugin unsafe.Pointer) (*Context, error) {
 				"/tmp/compressed-logs.clp.zstd",
 				"/compressed-logs.clp.zst",
 			); err != nil {
-				log.Printf("Failed to upload to S3")
+				log.Printf("[error] Failed to upload to S3")
 			}
 		},
 	)

@@ -20,13 +20,12 @@ func NewContext(plugin unsafe.Pointer) (*Context, error) {
 	}
 
 	bucket := output.FLBPluginConfigKey(plugin, "log_bucket")
-	err = ValidateLogBucket(client, bucket)
 
 	err = ValidateLogBucket(client, bucket)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Logs are configured to be uploaded to s3:// %v", bucket)
+	log.Printf("[info] Logs are configured to be uploaded to s3:// %v", bucket)
 
 	ctx := Context{
 		Client: client,

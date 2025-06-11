@@ -39,17 +39,18 @@ kubectl apply -f yscope-log-viewer-deployment.yaml -f aws-credentials.yaml
 kubectl apply -f logs-bucket-creation.yaml -f aws-credentials.yaml
 ```
 
-### Deploy fluent-bit dev container
-
-```shell
+### Deploy fluent-bit
+#### Fluent-bit-sidecar
+```shell 
 # Fluent-bit configs are in the yaml file
 kubectl apply -f fluent-bit-dev.yaml -f fluent-bit-dev-config.yaml -f aws-credentials.yaml
+kubectl apply -f fluent-bit-sidecar.yaml -f fluent-bit-sidecar-config.yaml -f aws-credentials.yaml
 
 # To launch a shell into the fluent-bit container
-kubectl exec -it fluent-bit-dev -c fluent-bit-dev -n default -- /bin/bash
+kubectl exec -it fluent-bit-sidecar -c ubuntu -n default -- /bin/bash
 
 # Test log collection
-echo '{"message": "a log message"}' > /tmp/test-0.log
+echo '{"message": "a log message"}' > /logs/test-0.log
 # Afterwards, /tmp/compressed-logs.clp.zst file should be created containing compressed logs
 
 # Inspect the logs for fluent-bit
@@ -61,6 +62,9 @@ kubectl logs fluent-bit-dev
 # port forward
 kubectl port-forward minio 9000:9000
 ```
+
+#### Fluent-bit-daemonset
+
 
 ### Delete cluster
 

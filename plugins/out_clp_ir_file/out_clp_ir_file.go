@@ -7,6 +7,7 @@ import (
 import (
 	"encoding/json"
 	"github.com/y-scope/fluent-bit-clp/plugins/out_clp_ir_file/internal"
+	"io"
 	"log"
 	"time"
 	"unsafe"
@@ -30,7 +31,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	// Gets called only once for each instance you have configured.
 	outCtx, err := internal.NewContext(plugin)
 	if err != nil {
-		log.Printf("[error] Failed to initialize plugin: %s", err)
+		log.Printf("[error] Failed to initialize plugin: %s.", err)
 		return output.FLB_ERROR
 	}
 
@@ -47,7 +48,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 
 	pluginCtx, ok := p.(*internal.Context)
 	if !ok {
-		log.Println("Could not read context during flush")
+		log.Println("[error] Could not read context during flush.")
 		return output.FLB_ERROR
 	}
 
@@ -61,7 +62,9 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 	for {
 		flbTimestamp, jsonRecord, err := decoder.GetRecord(dec)
 		if err != nil {
-			log.Printf("[info] decoder.GetRecord error: %v", err)
+			if err != io.EOF {
+				log.Printf("[info] decoder.GetRecord error: %v.", err)
+			}
 			break
 		}
 
@@ -72,14 +75,14 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 		case uint64:
 			timestamp = time.UnixMilli(int64(t))
 		default:
-			log.Printf("time provided invalid, defaulting to now. Invalid type is %T", t)
+			log.Printf("[warn] Time provided invalid, defaulting to now. Invalid type is %T.", t)
 			timestamp = time.Now()
 		}
 
 		var userKvPairs map[string]any
 		err = json.Unmarshal(jsonRecord, &userKvPairs)
 		if err != nil {
-			log.Printf("[error] Failed to unmarshal json record %v: %v", jsonRecord, err)
+			log.Printf("[error] Failed to unmarshal json record %v: %v.", jsonRecord, err)
 			return output.FLB_ERROR
 		}
 
@@ -127,7 +130,7 @@ func FLBPluginExitCtx(ctx unsafe.Pointer) int {
 
 	pluginCtx, ok := p.(*internal.Context)
 	if !ok {
-		log.Printf("[error] could not read context during flush")
+		log.Printf("[error] Could not read context during flush.")
 		return output.FLB_ERROR
 	}
 
