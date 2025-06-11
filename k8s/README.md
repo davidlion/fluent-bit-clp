@@ -49,7 +49,7 @@ kubectl apply -f fluent-bit-sidecar.yaml -f fluent-bit-sidecar-config.yaml -f aw
 kubectl exec -it fluent-bit-sidecar -c ubuntu -n default -- /bin/bash
 
 # Test log collection
-echo '{"message": "a log message"}' > /logs/test-0.log
+echo '{"message": "a log message"}' > /logs/jack/test-0.log
 # Afterwards, /tmp/compressed-logs.clp.zst file should be created containing compressed logs
 
 # Inspect the logs for fluent-bit

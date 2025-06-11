@@ -15,9 +15,10 @@ data:
     pipeline:
       inputs:
         - name: "tail"
-          path: "/logs/test-*.log"
+          path: "/logs/*/test-*.log"
           path_key: "file_path"
-          tag: "michelangelo_logs"
+          tag_regex: "^\/logs\/(?<user_name>[^\/]+)\/(?<file_name>test-.*\\.log)$"
+          tag: "<user_name>/<file_name>"
           # The interval of refreshing the list of watched files in seconds
           refresh_interval: 5
           # For new discovered files on start (without a database offset/position),
@@ -32,5 +33,5 @@ data:
 
       outputs:
         - name: "out_clp_ir_file"
-          match: "michelangelo_logs"
+          match: "*/*"
           log_bucket: "logs"

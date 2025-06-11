@@ -5,7 +5,6 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/y-scope/clp-ffi-go/ir"
 	"os"
-	"unsafe"
 )
 
 type Context struct {
@@ -14,19 +13,13 @@ type Context struct {
 	IRWriter   *ir.Writer
 }
 
-const defaultFilePerm = 0o600
-
-func NewContext(plugin unsafe.Pointer) (*Context, error) {
-	file, err := os.OpenFile(
-		"/tmp/compressed-logs.clp.zstd",
-		os.O_WRONLY|os.O_CREATE,
-		defaultFilePerm,
-	)
-	if nil != err {
-		return nil, fmt.Errorf("os.Create: %w", err)
+func NewContext() (*Context, error) {
+	tempFile, err := os.CreateTemp(os.TempDir(), "clp-irv2-*.clp.zst")
+	if err != nil {
+		return nil, fmt.Errorf("[error] Failed to create temp file: %w", err)
 	}
 
-	zstdWriter, err := zstd.NewWriter(file)
+	zstdWriter, err := zstd.NewWriter(tempFile)
 	if nil != err {
 		return nil, fmt.Errorf("zstd.NewWriter: %w", err)
 	}
@@ -37,7 +30,7 @@ func NewContext(plugin unsafe.Pointer) (*Context, error) {
 	}
 
 	ctx := Context{
-		File:       file,
+		File:       tempFile,
 		ZstdWriter: zstdWriter,
 		IRWriter:   irWriter,
 	}

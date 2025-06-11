@@ -42,7 +42,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 }
 
 //export FLBPluginFlushCtx
-func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.char) int {
+func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
 	// Gets called with a batch of records to be written to an instance.
 	p := output.FLBPluginGetContext(ctx)
 
@@ -53,12 +53,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 	}
 
 	// Decode logs from fluent bit and write to IR.
-	irWriter := pluginCtx.Compression.IRWriter
 	dec := decoder.New(data, int(length))
-	// TODO: tracking variables if you want to update timers once at the end based on the highest
-	// log level seen and last timestamp
-	var lastTimestamp time.Time
-	var maxLogLevel int
 	for {
 		flbTimestamp, jsonRecord, err := decoder.GetRecord(dec)
 		if err != nil {
@@ -86,10 +81,15 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 			return output.FLB_ERROR
 		}
 
+		ingestionCtx, err := internal.GetIngestionContext(pluginCtx, C.GoString(tag))
+		if err != nil {
+			log.Printf("[error] Failed to get ingestion context.")
+		}
+
 		event := ffi.NewLogEvent()
 		event.AutoKvPairs["timestamp"] = timestamp.UnixMilli()
 		event.UserKvPairs = userKvPairs
-		_, err = irWriter.WriteLogEvent(*event)
+		_, err = ingestionCtx.Compression.IRWriter.WriteLogEvent(*event)
 		if nil != err {
 			log.Printf("[error] ir.Writer.WriteLogEvent failed: %v", err)
 			return output.FLB_ERROR
@@ -111,40 +111,15 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int /* tag */, _ *C.ch
 			level = 4
 		}
 
-		if maxLogLevel < level {
-			maxLogLevel = level
-		}
-		if timestamp.After(lastTimestamp) {
-			lastTimestamp = timestamp
-		}
+		ingestionCtx.Flush.Update(level, timestamp)
 	}
-
-	pluginCtx.Flush.Update(maxLogLevel, lastTimestamp)
 
 	return output.FLB_OK
 }
 
 //export FLBPluginExitCtx
 func FLBPluginExitCtx(ctx unsafe.Pointer) int {
-	p := output.FLBPluginGetContext(ctx)
-
-	pluginCtx, ok := p.(*internal.Context)
-	if !ok {
-		log.Printf("[error] Could not read context during flush.")
-		return output.FLB_ERROR
-	}
-
-	irWriter := pluginCtx.Compression.IRWriter
-
-	// Cleanup the writers (move to FLBPluginExitCtx).
-	err := irWriter.Close()
-	if nil != err {
-		log.Printf("[error] ir.Writer.Close failed: %v", err)
-		return output.FLB_ERROR
-	}
-
-	zstdWriter := pluginCtx.Compression.ZstdWriter
-	zstdWriter.Close()
+	// TODO: figure out how to gracefully shutdown
 
 	return output.FLB_OK
 }

@@ -76,7 +76,7 @@ extern "C" {
 
 extern GoInt FLBPluginRegister(void* def);
 extern GoInt FLBPluginInit(void* plugin);
-extern GoInt FLBPluginFlushCtx(void* ctx, void* data, int length, char* _);
+extern GoInt FLBPluginFlushCtx(void* ctx, void* data, int length, char* tag);
 extern GoInt FLBPluginExitCtx(void* ctx);
 
 #ifdef __cplusplus

@@ -20,7 +20,7 @@ func TestManager(t *testing.T) {
 		},
 	)
 	if nil != err {
-		t.Fatalf("failed to create flush manager")
+		t.Fatalf("failed to create flush context")
 	}
 
 	timeoutManager.Update(0, time.Now())

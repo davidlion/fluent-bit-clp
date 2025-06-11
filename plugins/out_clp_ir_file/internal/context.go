@@ -10,27 +10,31 @@ import (
 	"unsafe"
 )
 
-type Context struct {
-	Compression compression.Context
-	S3          s3.Context
-	Flush       flush.Manager
+type IngestionContext struct {
+	Compression *compression.Context
+	Flush       *flush.Context
 }
 
-func NewContext(plugin unsafe.Pointer) (*Context, error) {
-	s3Ctx, err := s3.NewContext(plugin)
-	if err != nil {
-		log.Printf("[error] Failed to create s3 context")
+type Context struct {
+	S3        s3.Context
+	Ingestion map[string]*IngestionContext
+}
+
+func GetIngestionContext(context *Context, path string) (*IngestionContext, error) {
+	if ingestionContext, exists := context.Ingestion[path]; exists {
+		return ingestionContext, nil
 	}
 
-	compressionCtx, err := compression.NewContext(plugin)
+	compressionCtx, err := compression.NewContext()
 	if err != nil {
-		log.Printf("[error] Failed to create compression context")
+		log.Printf("[error] Failed to initialize compression context")
+		return nil, err
 	}
 
 	// All the times are taken from:
 	// https://github.com/y-scope/clp-loglib-py/blob/main/src/clp_logging/handlers.py#L185
 	// TODO: update to use enum
-	flushManager, err := flush.NewManager(
+	flushCtx, err := flush.NewContext(
 		[]time.Duration{
 			3 * time.Second, // DEBUG
 			3 * time.Second, // INFO
@@ -52,22 +56,40 @@ func NewContext(plugin unsafe.Pointer) (*Context, error) {
 			}
 
 			if err := s3.UploadToS3(
-				s3Ctx.Client, s3Ctx.Bucket,
-				"/tmp/compressed-logs.clp.zstd",
-				"/compressed-logs.clp.zst",
+				context.S3.Client, context.S3.Bucket,
+				compressionCtx.File.Name(),
+				path+".clp.zst",
 			); err != nil {
 				log.Printf("[error] Failed to upload to S3")
 			}
 		},
 	)
-	if nil != err {
-		return nil, fmt.Errorf("flush.NewManager: %w", err)
+
+	if err != nil {
+		log.Printf("[error] Fafiled to initialize flush context.")
+		return nil, err
+	}
+
+	ingestionContext := &IngestionContext{
+		Compression: compressionCtx,
+		Flush:       flushCtx,
+	}
+
+	context.Ingestion[path] = ingestionContext
+
+	return ingestionContext, nil
+}
+
+func NewContext(plugin unsafe.Pointer) (*Context, error) {
+	s3Ctx, err := s3.NewContext(plugin)
+	if err != nil {
+		log.Printf("[error] Failed to create s3 context")
+		return nil, fmt.Errorf("flush.NewContext: %w", err)
 	}
 
 	ctx := Context{
-		Compression: *compressionCtx,
-		S3:          *s3Ctx,
-		Flush:       flushManager,
+		S3:        *s3Ctx,
+		Ingestion: make(map[string]*IngestionContext),
 	}
 	return &ctx, nil
 }

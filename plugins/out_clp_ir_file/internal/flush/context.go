@@ -12,7 +12,7 @@ type Manager interface {
 	Update(level int, timestamp time.Time)
 }
 
-type manager struct {
+type Context struct {
 	defaultLogLevel int
 	hardDeltas      []time.Duration
 	hardTimer       *time.Timer
@@ -24,19 +24,19 @@ type manager struct {
 	mutex           sync.Mutex
 }
 
-func NewManager(
+func NewContext(
 	hardDeltas []time.Duration,
 	softDeltas []time.Duration,
 	defaultLogLevel int,
 	userCallback func(),
-) (Manager, error) {
+) (*Context, error) {
 	if len(hardDeltas) == 0 {
 		return nil, errors.New("hard flush deltas cannot be empty")
 	}
 	if len(softDeltas) == 0 {
 		return nil, errors.New("soft flush deltas cannot be empty")
 	}
-	return &manager{
+	return &Context{
 		hardDeltas:      hardDeltas,
 		hardTimer:       time.NewTimer(0),
 		softDeltas:      softDeltas,
@@ -46,7 +46,7 @@ func NewManager(
 	}, nil
 }
 
-func (m *manager) callback() {
+func (m *Context) callback() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -57,7 +57,7 @@ func (m *manager) callback() {
 	m.userCallback()
 }
 
-func (m *manager) Update(level int, timestamp time.Time) {
+func (m *Context) Update(level int, timestamp time.Time) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
