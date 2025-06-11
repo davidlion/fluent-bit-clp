@@ -43,7 +43,6 @@ kubectl apply -f logs-bucket-creation.yaml -f aws-credentials.yaml
 #### Fluent-bit-sidecar
 ```shell 
 # Fluent-bit configs are in the yaml file
-kubectl apply -f fluent-bit-dev.yaml -f fluent-bit-dev-config.yaml -f aws-credentials.yaml
 kubectl apply -f fluent-bit-sidecar.yaml -f fluent-bit-sidecar-config.yaml -f aws-credentials.yaml
 
 # To launch a shell into the fluent-bit container
@@ -54,7 +53,7 @@ echo '{"message": "a log message"}' > /logs/test-0.log
 # Afterwards, /tmp/compressed-logs.clp.zst file should be created containing compressed logs
 
 # Inspect the logs for fluent-bit
-kubectl logs fluent-bit-dev
+kubectl logs fluent-bit-sidecar -c fluent-bit-sidecar
 # We should get the following
 [2025/05/27 02:35:58] [info] [input:tail:tail.0] inotify_fs_add(): inode=865010 watch_fd=1 name=/tmp/test-0.log
 2025/05/27 02:36:03 [info] decoder.GetRecord error: EOF
