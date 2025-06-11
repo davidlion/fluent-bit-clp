@@ -49,14 +49,13 @@ kubectl apply -f fluent-bit-sidecar.yaml -f fluent-bit-sidecar-config.yaml -f aw
 kubectl exec -it fluent-bit-sidecar -c ubuntu -n default -- /bin/bash
 
 # Test log collection
-echo '{"message": "a log message"}' > /logs/jack/test-0.log
-# Afterwards, /tmp/compressed-logs.clp.zst file should be created containing compressed logs
+mkdir -p /logs/$(whoami)/
+echo '{"message": "a log message"}' > /logs/$(whoami)/test-0.log
 
 # Inspect the logs for fluent-bit
 kubectl logs fluent-bit-sidecar -c fluent-bit-sidecar
 # We should get the following
-[2025/05/27 02:35:58] [info] [input:tail:tail.0] inotify_fs_add(): inode=865010 watch_fd=1 name=/tmp/test-0.log
-2025/05/27 02:36:03 [info] decoder.GetRecord error: EOF
+2025/06/11 16:14:29 [info] Uploaded /tmp/clp-irv2-1474549675.clp.zst to s3://logs/root/test-0.log.clp.zst
 
 # port forward
 kubectl port-forward minio 9000:9000
@@ -74,14 +73,10 @@ kubectl apply -f fluent-bit-daemonset.yaml -f fluent-bit-daemonset-config.yaml -
 kubectl exec -it ubuntu -n default -- /bin/bash
 
 # Test log collection
-echo '{"message": "a log message"}' > /var/log/test-0.log
+# Test log collection
+mkdir -p /logs/$(whoami)/
+echo '{"message": "a log message"}' > /var/log/$(whoami)/test-0.log
 # Afterwards, /tmp/compressed-logs.clp.zst file should be created containing compressed logs
-
-# Inspect the logs for fluent-bit
-kubectl logs fluent-bit-sidecar -c fluent-bit-sidecar
-# We should get the following
-[2025/05/27 02:35:58] [info] [input:tail:tail.0] inotify_fs_add(): inode=865010 watch_fd=1 name=/tmp/test-0.log
-2025/05/27 02:36:03 [info] decoder.GetRecord error: EOF
 
 # port forward
 kubectl port-forward minio 9000:9000

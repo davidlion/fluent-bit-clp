@@ -29,7 +29,7 @@ func FLBPluginRegister(def unsafe.Pointer) int {
 //export FLBPluginInit
 func FLBPluginInit(plugin unsafe.Pointer) int {
 	// Gets called only once for each instance you have configured.
-	outCtx, err := internal.NewContext(plugin)
+	outCtx, err := internal.NewPluginContext(plugin)
 	if err != nil {
 		log.Printf("[error] Failed to initialize plugin: %s.", err)
 		return output.FLB_ERROR
@@ -45,7 +45,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
 	// Gets called with a batch of records to be written to an instance.
 	p := output.FLBPluginGetContext(ctx)
-	pluginCtx, ok := p.(*internal.Context)
+	pluginCtx, ok := p.(*internal.PluginContext)
 	if !ok {
 		log.Println("[error] Could not read context during flush.")
 		return output.FLB_ERROR
@@ -80,13 +80,20 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 			return output.FLB_ERROR
 		}
 
-		ingestionCtx, err := internal.GetIngestionContext(pluginCtx, C.GoString(tag))
+		ingestionCtx, err := internal.GetOrCreateIngestionContext(pluginCtx, C.GoString(tag))
 		if err != nil {
 			log.Printf("[error] Failed to get ingestion context.")
 		}
 
 		event := ffi.NewLogEvent()
+		// Populate timestamps and file_path as auto-kv-pairs
 		event.AutoKvPairs["timestamp"] = timestamp.UnixMilli()
+		filePath, exist := userKvPairs["file_path"]
+		if exist {
+			delete(userKvPairs, "file_path")
+		}
+		event.AutoKvPairs["file_path"] = filePath
+
 		event.UserKvPairs = userKvPairs
 		_, err = ingestionCtx.Compression.IRWriter.WriteLogEvent(*event)
 		if nil != err {

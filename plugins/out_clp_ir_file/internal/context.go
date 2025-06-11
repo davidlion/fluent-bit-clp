@@ -1,95 +1,77 @@
 package internal
 
 import (
-	"fmt"
-	"github.com/y-scope/fluent-bit-clp/plugins/out_clp_ir_file/internal/compression"
-	"github.com/y-scope/fluent-bit-clp/plugins/out_clp_ir_file/internal/flush"
-	"github.com/y-scope/fluent-bit-clp/plugins/out_clp_ir_file/internal/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/fluent/fluent-bit-go/output"
+	"github.com/klauspost/compress/zstd"
+	"github.com/y-scope/clp-ffi-go/ir"
 	"log"
+	"os"
+	"sync"
 	"time"
 	"unsafe"
 )
 
-type IngestionContext struct {
-	Compression *compression.CompressionContext
-	Flush       *flush.FlushContext
+// FlushContext manages timing and callback logic for log flushing.
+type FlushContext struct {
+	defaultLogLevel int
+	hardDeltas      []time.Duration
+	hardTimer       *time.Timer
+	hardTimeout     time.Time
+	softDelta       time.Duration
+	softDeltas      []time.Duration
+	softTimer       *time.Timer
+	userCallback    func()
+	mutex           sync.Mutex
 }
 
-type Context struct {
-	S3        s3.S3Context
+// CompressionContext encapsulates file and compression writers.
+type CompressionContext struct {
+	File       *os.File
+	ZstdWriter *zstd.Encoder
+	IRWriter   *ir.Writer
+}
+
+// IngestionContext contains compression and flush contexts for a particular log path.
+type IngestionContext struct {
+	Compression *CompressionContext
+	Flush       *FlushContext
+}
+
+// S3Context holds AWS S3 configuration and client.
+type S3Context struct {
+	Client *s3.Client
+	Bucket string
+}
+
+// PluginContext is the top-level context for the plugin.
+type PluginContext struct {
+	S3        *S3Context
 	Ingestion map[string]*IngestionContext
 }
 
-func GetIngestionContext(context *Context, path string) (*IngestionContext, error) {
-	if ingestionContext, exists := context.Ingestion[path]; exists {
-		return ingestionContext, nil
-	}
-
-	compressionCtx, err := compression.NewCompressionContext()
+// NewPluginContext initializes a new PluginContext
+func NewPluginContext(plugin unsafe.Pointer) (*PluginContext, error) {
+	client, err := S3CreateClient()
 	if err != nil {
-		log.Printf("[error] Failed to initialize compression context")
+		log.Printf("[error] Failed to create S3 client: %v", err)
 		return nil, err
 	}
 
-	// All the times are taken from:
-	// https://github.com/y-scope/clp-loglib-py/blob/main/src/clp_logging/handlers.py#L185
-	// TODO: update to use enum
-	flushCtx, err := flush.NewFlushContext(
-		[]time.Duration{
-			3 * time.Second, // DEBUG
-			3 * time.Second, // INFO
-			3 * time.Second, // WARN
-			3 * time.Second, // ERROR
-			3 * time.Second, // FATAL
-		},
-		[]time.Duration{
-			3 * time.Second, // DEBUG
-			3 * time.Second, // INFO
-			3 * time.Second, // WARN
-			3 * time.Second, // ERROR
-			3 * time.Second, // FATAL
-		},
-		0,
-		func() {
-			if err := compressionCtx.ZstdWriter.Flush(); err != nil {
-				log.Printf("[error] Flush failed because zstdWriter.Flush failed: %v", err)
-			}
-
-			if err := s3.UploadToS3(
-				context.S3.Client, context.S3.Bucket,
-				compressionCtx.File.Name(),
-				path+".clp.zst",
-			); err != nil {
-				log.Printf("[error] Failed to upload to S3")
-			}
-		},
-	)
-
-	if err != nil {
-		log.Printf("[error] Fafiled to initialize flush context.")
+	bucket := output.FLBPluginConfigKey(plugin, "log_bucket")
+	if err := S3ValidateLogBucket(client, bucket); err != nil {
+		log.Printf("[error] Failed to validate log bucket %q: %v", bucket, err)
 		return nil, err
 	}
+	log.Printf("[info] Logs are configured to be uploaded to s3://%s", bucket)
 
-	ingestionContext := &IngestionContext{
-		Compression: compressionCtx,
-		Flush:       flushCtx,
-	}
-
-	context.Ingestion[path] = ingestionContext
-
-	return ingestionContext, nil
-}
-
-func NewContext(plugin unsafe.Pointer) (*Context, error) {
-	s3Ctx, err := s3.NewS3Context(plugin)
-	if err != nil {
-		log.Printf("[error] Failed to create s3 context")
-		return nil, fmt.Errorf("flush.NewCompressionContext: %w", err)
-	}
-
-	ctx := Context{
-		S3:        *s3Ctx,
+	pluginCtx := &PluginContext{
+		S3: &S3Context{
+			Client: client,
+			Bucket: bucket,
+		},
 		Ingestion: make(map[string]*IngestionContext),
 	}
-	return &ctx, nil
+
+	return pluginCtx, nil
 }
