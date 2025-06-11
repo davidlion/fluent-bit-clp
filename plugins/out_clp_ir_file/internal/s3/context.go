@@ -7,12 +7,12 @@ import (
 	"unsafe"
 )
 
-type Context struct {
+type S3Context struct {
 	Client *s3.Client
 	Bucket string
 }
 
-func NewContext(plugin unsafe.Pointer) (*Context, error) {
+func NewS3Context(plugin unsafe.Pointer) (*S3Context, error) {
 	client, err := CreateS3Client()
 	if err != nil {
 		log.Printf("[error] Failed create s3 client")
@@ -27,7 +27,7 @@ func NewContext(plugin unsafe.Pointer) (*Context, error) {
 	}
 	log.Printf("[info] Logs are configured to be uploaded to s3:// %v", bucket)
 
-	ctx := Context{
+	ctx := S3Context{
 		Client: client,
 		Bucket: bucket,
 	}

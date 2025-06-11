@@ -45,7 +45,6 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
 	// Gets called with a batch of records to be written to an instance.
 	p := output.FLBPluginGetContext(ctx)
-
 	pluginCtx, ok := p.(*internal.Context)
 	if !ok {
 		log.Println("[error] Could not read context during flush.")

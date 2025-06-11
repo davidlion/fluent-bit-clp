@@ -11,12 +11,12 @@ import (
 )
 
 type IngestionContext struct {
-	Compression *compression.Context
-	Flush       *flush.Context
+	Compression *compression.CompressionContext
+	Flush       *flush.FlushContext
 }
 
 type Context struct {
-	S3        s3.Context
+	S3        s3.S3Context
 	Ingestion map[string]*IngestionContext
 }
 
@@ -25,7 +25,7 @@ func GetIngestionContext(context *Context, path string) (*IngestionContext, erro
 		return ingestionContext, nil
 	}
 
-	compressionCtx, err := compression.NewContext()
+	compressionCtx, err := compression.NewCompressionContext()
 	if err != nil {
 		log.Printf("[error] Failed to initialize compression context")
 		return nil, err
@@ -34,7 +34,7 @@ func GetIngestionContext(context *Context, path string) (*IngestionContext, erro
 	// All the times are taken from:
 	// https://github.com/y-scope/clp-loglib-py/blob/main/src/clp_logging/handlers.py#L185
 	// TODO: update to use enum
-	flushCtx, err := flush.NewContext(
+	flushCtx, err := flush.NewFlushContext(
 		[]time.Duration{
 			3 * time.Second, // DEBUG
 			3 * time.Second, // INFO
@@ -81,10 +81,10 @@ func GetIngestionContext(context *Context, path string) (*IngestionContext, erro
 }
 
 func NewContext(plugin unsafe.Pointer) (*Context, error) {
-	s3Ctx, err := s3.NewContext(plugin)
+	s3Ctx, err := s3.NewS3Context(plugin)
 	if err != nil {
 		log.Printf("[error] Failed to create s3 context")
-		return nil, fmt.Errorf("flush.NewContext: %w", err)
+		return nil, fmt.Errorf("flush.NewCompressionContext: %w", err)
 	}
 
 	ctx := Context{

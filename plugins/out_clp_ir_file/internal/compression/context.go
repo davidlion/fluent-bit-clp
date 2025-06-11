@@ -7,13 +7,13 @@ import (
 	"os"
 )
 
-type Context struct {
+type CompressionContext struct {
 	File       *os.File
 	ZstdWriter *zstd.Encoder
 	IRWriter   *ir.Writer
 }
 
-func NewContext() (*Context, error) {
+func NewCompressionContext() (*CompressionContext, error) {
 	tempFile, err := os.CreateTemp(os.TempDir(), "clp-irv2-*.clp.zst")
 	if err != nil {
 		return nil, fmt.Errorf("[error] Failed to create temp file: %w", err)
@@ -29,11 +29,11 @@ func NewContext() (*Context, error) {
 		return nil, fmt.Errorf("ir.NewWriter: %w", err)
 	}
 
-	ctx := Context{
+	compressionCtx := CompressionContext{
 		File:       tempFile,
 		ZstdWriter: zstdWriter,
 		IRWriter:   irWriter,
 	}
 
-	return &ctx, nil
+	return &compressionCtx, nil
 }
