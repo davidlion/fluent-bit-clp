@@ -1,28 +1,29 @@
 package internal
 
 import (
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/fluent/fluent-bit-go/output"
-	"github.com/klauspost/compress/zstd"
-	"github.com/y-scope/clp-ffi-go/ir"
 	"log"
 	"os"
 	"sync"
 	"time"
 	"unsafe"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/fluent/fluent-bit-go/output"
+	"github.com/klauspost/compress/zstd"
+	"github.com/y-scope/clp-ffi-go/ir"
 )
 
 // FlushContext manages timing and callback logic for log flushing.
 type FlushContext struct {
 	defaultLogLevel int
 	hardDeltas      []time.Duration
-	hardTimer       *time.Timer
+	HardTimer       *time.Timer
 	hardTimeout     time.Time
 	softDelta       time.Duration
 	softDeltas      []time.Duration
-	softTimer       *time.Timer
+	SoftTimer       *time.Timer
 	userCallback    func()
-	mutex           sync.Mutex
+	Mutex           sync.Mutex
 }
 
 // CompressionContext encapsulates file and compression writers.

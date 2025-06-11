@@ -15,9 +15,9 @@ func TestFlushManager(t *testing.T) {
 
 	flushCtx := &FlushContext{
 		hardDeltas:      hardDeltas,
-		hardTimer:       time.NewTimer(0),
+		HardTimer:       time.NewTimer(0),
 		softDeltas:      softDeltas,
-		softTimer:       time.NewTimer(0),
+		SoftTimer:       time.NewTimer(0),
 		defaultLogLevel: 0,
 		userCallback: func() {
 			t.Logf("flush occurred")

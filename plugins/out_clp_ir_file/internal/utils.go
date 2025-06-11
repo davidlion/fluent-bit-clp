@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"os"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 	"github.com/klauspost/compress/zstd"
 	"github.com/y-scope/clp-ffi-go/ir"
-	"log"
-	"os"
-	"time"
 )
 
 // GetOrCreateIngestionContext returns an existing IngestionContext for the given path,
@@ -29,17 +30,17 @@ func GetOrCreateIngestionContext(pluginCtx *PluginContext, path string) (*Ingest
 	}
 
 	zstdWriter, err := zstd.NewWriter(tempFile)
-	if nil != err {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
+	if err != nil {
+		_ = tempFile.Close()
+		_ = os.Remove(tempFile.Name())
 		return nil, fmt.Errorf("failed to create zstd writer: %w", err)
 	}
 
 	irWriter, err := ir.NewWriter[ir.FourByteEncoding](zstdWriter)
-	if nil != err {
-		zstdWriter.Close()
-		tempFile.Close()
-		os.Remove(tempFile.Name())
+	if err != nil {
+		_ = zstdWriter.Close()
+		_ = tempFile.Close()
+		_ = os.Remove(tempFile.Name())
 		return nil, fmt.Errorf("failed to create IR writer: %w", err)
 	}
 
@@ -61,12 +62,13 @@ func GetOrCreateIngestionContext(pluginCtx *PluginContext, path string) (*Ingest
 		3 * time.Second, // FATAL
 	}
 
-	// Timers must be stopped and drained if not used, but here we assume they're managed in FlushContext logic.
+	// Timers must be stopped and drained if not used,
+	// but here we assume they're managed in FlushContext logic.
 	flushCtx := &FlushContext{
 		hardDeltas:      hardDeltas,
-		hardTimer:       time.NewTimer(0),
+		HardTimer:       time.NewTimer(0),
 		softDeltas:      softDeltas,
-		softTimer:       time.NewTimer(0),
+		SoftTimer:       time.NewTimer(0),
 		defaultLogLevel: 0,
 		userCallback: func() {
 			if err := zstdWriter.Flush(); err != nil {
@@ -126,7 +128,7 @@ const (
 	bucketMissingCode = "NotFound"
 )
 
-// S3ValidateLogBucket checks if the given bucket exists and that credentials work.
+// S3ValidateLogBucket checks if the given bucket exists and that credential works.
 func S3ValidateLogBucket(s3Client *s3.Client, logBucket string) error {
 	_, err := s3Client.HeadBucket(
 		context.TODO(),
@@ -155,7 +157,11 @@ func S3Upload(s3Client *s3.Client, bucket, localPath, remotePath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open file %q: %w", localPath, err)
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil {
+			log.Printf("[warn] Failed to close file %q: %v", localPath, cerr)
+		}
+	}()
 
 	_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
@@ -163,7 +169,8 @@ func S3Upload(s3Client *s3.Client, bucket, localPath, remotePath string) error {
 		Body:   file,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to upload %s to s3://%s/%s: %w", localPath, bucket, remotePath, err)
+		return fmt.Errorf("failed to upload %s to s3://%s/%s: %w",
+			localPath, bucket, remotePath, err)
 	}
 	log.Printf("[info] Uploaded %s to s3://%s/%s", localPath, bucket, remotePath)
 	return nil

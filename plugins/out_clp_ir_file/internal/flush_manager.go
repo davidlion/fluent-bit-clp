@@ -11,10 +11,10 @@ type FlushManager interface {
 	Update(level int, timestamp time.Time)
 }
 
-// callback is called when a flush timer fires.
-func (m *FlushContext) callback() {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+// Callback is called when a flush timer fires.
+func (m *FlushContext) Callback() {
+	m.Mutex.Lock()
+	defer m.Mutex.Unlock()
 
 	m.stopAndClearTimers()
 	m.hardTimeout = time.Time{}
@@ -24,26 +24,27 @@ func (m *FlushContext) callback() {
 
 // Update schedules new hard/soft flush timers based on the log level and timestamp.
 func (m *FlushContext) Update(level int, timestamp time.Time) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.Mutex.Lock()
+	defer m.Mutex.Unlock()
 
-	hardDelta := m.getDeltaSafe(level, m.hardDeltas, m.defaultLogLevel, "hard")
+	hardDelta := getDeltaSafe(level, m.hardDeltas, m.defaultLogLevel, "hard")
 	nextHardTimeout := timestamp.Add(hardDelta)
 	if nextHardTimeout.IsZero() || nextHardTimeout.Before(m.hardTimeout) {
-		m.replaceTimer(&m.hardTimer, time.Until(nextHardTimeout), m.callback)
+		replaceTimer(&m.HardTimer, time.Until(nextHardTimeout), m.Callback)
 		m.hardTimeout = nextHardTimeout
 	}
 
-	softDelta := m.getDeltaSafe(level, m.softDeltas, m.defaultLogLevel, "soft")
+	softDelta := getDeltaSafe(level, m.softDeltas, m.defaultLogLevel, "soft")
 	if softDelta < m.softDelta {
 		m.softDelta = softDelta
 	}
 	nextSoftTimeout := timestamp.Add(softDelta)
-	m.replaceTimer(&m.softTimer, time.Until(nextSoftTimeout), m.callback)
+	replaceTimer(&m.SoftTimer, time.Until(nextSoftTimeout), m.Callback)
 }
 
 // getDeltaSafe returns the delta for the level, or defaults and logs a warning.
-func (m *FlushContext) getDeltaSafe(level int, deltas []time.Duration, defaultLevel int, label string) time.Duration {
+func getDeltaSafe(level int, deltas []time.Duration, defaultLevel int, label string,
+) time.Duration {
 	if level >= 0 && level < len(deltas) {
 		return deltas[level]
 	}
@@ -61,12 +62,12 @@ func (m *FlushContext) getDeltaSafe(level int, deltas []time.Duration, defaultLe
 
 // stopAndClearTimers stops and clears both hard and soft timers.
 func (m *FlushContext) stopAndClearTimers() {
-	m.stopTimer(&m.hardTimer)
-	m.stopTimer(&m.softTimer)
+	stopTimer(&m.HardTimer)
+	stopTimer(&m.SoftTimer)
 }
 
 // stopTimer safely stops a timer if it is not nil.
-func (m *FlushContext) stopTimer(timer **time.Timer) {
+func stopTimer(timer **time.Timer) {
 	if *timer != nil {
 		(*timer).Stop()
 		*timer = nil
@@ -74,7 +75,7 @@ func (m *FlushContext) stopTimer(timer **time.Timer) {
 }
 
 // replaceTimer stops the old timer and creates a new one.
-func (m *FlushContext) replaceTimer(timer **time.Timer, duration time.Duration, callback func()) {
-	m.stopTimer(timer)
+func replaceTimer(timer **time.Timer, duration time.Duration, callback func()) {
+	stopTimer(timer)
 	*timer = time.AfterFunc(duration, callback)
 }
