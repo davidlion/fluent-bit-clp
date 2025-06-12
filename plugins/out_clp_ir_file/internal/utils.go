@@ -75,10 +75,8 @@ func GetOrCreateIngestionContext(pluginCtx *PluginContext, path string) (*Ingest
 				log.Printf("[error] zstdWriter.Flush failed: %v", err)
 			}
 
-			if err := S3Upload(
-				pluginCtx.S3.Client, pluginCtx.S3.Bucket,
-				tempFile.Name(),
-				path+".clp.zst",
+			if err := S3Upload(pluginCtx.S3.Client, pluginCtx.S3.Bucket, tempFile.Name(),
+				fmt.Sprintf("%s.%d.clp.zst", path, time.Now().UnixMilli()),
 			); err != nil {
 				log.Printf("[error] Failed to upload to S3: %v", err)
 			}
