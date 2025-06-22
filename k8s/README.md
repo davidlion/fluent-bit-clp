@@ -26,7 +26,7 @@ Follow the guide here: [k3d]
 ```shell
 # Start k8s with 1 server and 1 agent, and mount plugins local directory to the cluster
 k3d cluster create yscope --servers 1 --agents 1 \
-  -v <repo root directory>/prebuilt:/fluent-bit/plugins \
+  -v <repo root directory>/pre-built:/fluent-bit/plugins \
   -p 9000:30000@agent:0 \
   -p 9001:30001@agent:0
 ```
@@ -57,8 +57,6 @@ kubectl logs fluent-bit-sidecar -c fluent-bit-sidecar
 # We should get the following
 2025/06/11 16:14:29 [info] Uploaded /tmp/clp-irv2-1474549675.clp.zst to s3://logs/root/test-0.log.clp.zst
 
-# port forward
-kubectl port-forward minio 9000:9000
 ```
 
 #### Fluent-bit-daemonset

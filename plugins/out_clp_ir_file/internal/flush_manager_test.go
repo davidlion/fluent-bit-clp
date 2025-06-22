@@ -7,18 +7,18 @@ import (
 )
 
 func TestFlushManager(t *testing.T) {
-	hardDeltas := []time.Duration{50 * time.Millisecond}
-	softDeltas := []time.Duration{50 * time.Millisecond}
+	flushConfig := &FlushConfigContext{
+		defaultLogLevel: 0,
+		hardDeltas:      []time.Duration{50 * time.Millisecond},
+		softDeltas:      []time.Duration{50 * time.Millisecond},
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 
 	flushCtx := &FlushContext{
-		hardDeltas:      hardDeltas,
-		HardTimer:       time.NewTimer(0),
-		softDeltas:      softDeltas,
-		SoftTimer:       time.NewTimer(0),
-		defaultLogLevel: 0,
+		HardTimer: time.NewTimer(0),
+		SoftTimer: time.NewTimer(0),
 		userCallback: func() {
 			t.Logf("flush occurred")
 			wg.Done()
@@ -26,7 +26,7 @@ func TestFlushManager(t *testing.T) {
 	}
 
 	// Trigger an update that should schedule the flush
-	flushCtx.Update(0, time.Now())
+	flushCtx.Update(0, time.Now(), flushConfig)
 
 	// Wait for the callback or timeout after 1s
 	done := make(chan struct{})

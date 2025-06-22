@@ -44,39 +44,19 @@ func GetOrCreateIngestionContext(pluginCtx *PluginContext, path string) (*Ingest
 		return nil, fmt.Errorf("failed to create IR writer: %w", err)
 	}
 
-	// All the times are taken from:
-	// https://github.com/y-scope/clp-loglib-py/blob/main/src/clp_logging/handlers.py#L185
-	// TODO: update to use enum
-	hardDeltas := []time.Duration{
-		3 * time.Second, // DEBUG
-		3 * time.Second, // INFO
-		3 * time.Second, // WARN
-		3 * time.Second, // ERROR
-		3 * time.Second, // FATAL
-	}
-	softDeltas := []time.Duration{
-		3 * time.Second, // DEBUG
-		3 * time.Second, // INFO
-		3 * time.Second, // WARN
-		3 * time.Second, // ERROR
-		3 * time.Second, // FATAL
-	}
-
 	// Timers must be stopped and drained if not used,
 	// but here we assume they're managed in FlushContext logic.
 	flushCtx := &FlushContext{
-		hardDeltas:      hardDeltas,
-		HardTimer:       time.NewTimer(0),
-		softDeltas:      softDeltas,
-		SoftTimer:       time.NewTimer(0),
-		defaultLogLevel: 0,
+		HardTimer: time.NewTimer(0),
+		SoftTimer: time.NewTimer(0),
 		userCallback: func() {
 			if err := zstdWriter.Flush(); err != nil {
 				log.Printf("[error] zstdWriter.Flush failed: %v", err)
 			}
 
 			if err := S3Upload(pluginCtx.S3.Client, pluginCtx.S3.Bucket, tempFile.Name(),
-				fmt.Sprintf("%s.%d.clp.zst", path, time.Now().UnixMilli()),
+				// mt.Sprintf("%s.%d.clp.zst", path, time.Now().UnixMilli()),
+				fmt.Sprintf("%s.clp.zst", path),
 			); err != nil {
 				log.Printf("[error] Failed to upload to S3: %v", err)
 			}

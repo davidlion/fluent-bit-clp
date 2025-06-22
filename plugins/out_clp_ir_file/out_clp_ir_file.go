@@ -55,6 +55,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 		return output.FLB_ERROR
 	}
 
+	flushConfig := pluginCtx.FlushConfig
 	tagStr := C.GoString(tag)
 
 	dec := decoder.New(data, int(length))
@@ -95,7 +96,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 		// we mark the timestamp and file_path as auto-generated KV, leaving the rest as user KV.
 		event := ffi.NewLogEvent()
 		event.AutoKvPairs["timestamp"] = timestamp.UnixMilli()
-		// Extract file_path if it exists, otherwise set as empty string.
+		// Extract file_path if it exists, otherwise set as an empty string.
 		filePath, exists := userKvPairs[filePathKey]
 		if exists {
 			delete(userKvPairs, filePathKey)
@@ -139,7 +140,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 			level = 1
 		}
 
-		ingestionCtx.Flush.Update(level, timestamp)
+		ingestionCtx.Flush.Update(level, timestamp, flushConfig)
 	}
 
 	return output.FLB_OK

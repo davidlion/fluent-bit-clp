@@ -13,17 +13,21 @@ import (
 	"github.com/y-scope/clp-ffi-go/ir"
 )
 
-// FlushContext manages timing and callback logic for log flushing.
-type FlushContext struct {
+// FlushConfigContext stores the flush control configurations
+type FlushConfigContext struct {
 	defaultLogLevel int
 	hardDeltas      []time.Duration
-	HardTimer       *time.Timer
-	hardTimeout     time.Time
-	softDelta       time.Duration
 	softDeltas      []time.Duration
-	SoftTimer       *time.Timer
-	userCallback    func()
-	Mutex           sync.Mutex
+}
+
+// FlushContext manages timing and callback logic for log flushing.
+type FlushContext struct {
+	HardTimer    *time.Timer
+	hardTimeout  time.Time
+	softDelta    time.Duration
+	SoftTimer    *time.Timer
+	userCallback func()
+	Mutex        sync.Mutex
 }
 
 // CompressionContext encapsulates file and compression writers.
@@ -47,8 +51,22 @@ type S3Context struct {
 
 // PluginContext is the top-level context for the plugin.
 type PluginContext struct {
-	S3        *S3Context
-	Ingestion map[string]*IngestionContext
+	S3          *S3Context
+	Ingestion   map[string]*IngestionContext
+	FlushConfig *FlushConfigContext
+}
+
+func GetConfigWithDefaultTimeDuration(
+	plugin unsafe.Pointer,
+	key string,
+	defaultVal time.Duration,
+) time.Duration {
+	duration, err := time.ParseDuration(output.FLBPluginConfigKey(plugin, key))
+	if err != nil {
+		log.Printf("[error] Failed to parse duration %q: %v", key, err)
+		return defaultVal
+	}
+	return duration
 }
 
 // NewPluginContext initializes a new PluginContext
@@ -66,12 +84,33 @@ func NewPluginContext(plugin unsafe.Pointer) (*PluginContext, error) {
 	}
 	log.Printf("[info] Logs are configured to be uploaded to s3://%s", bucket)
 
+	// Flush behavior control - use very aggressive defaults for now
+	hardDeltas := []time.Duration{
+		GetConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_debug", 3*time.Second),
+		GetConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_info", 3*time.Second),
+		GetConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_warn", 3*time.Second),
+		GetConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_error", 3*time.Second),
+		GetConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_fatal", 3*time.Second),
+	}
+	softDeltas := []time.Duration{
+		GetConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_debug", 3*time.Second),
+		GetConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_info", 3*time.Second),
+		GetConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_warn", 3*time.Second),
+		GetConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_error", 3*time.Second),
+		GetConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_fatal", 3*time.Second),
+	}
+
 	pluginCtx := &PluginContext{
 		S3: &S3Context{
 			Client: client,
 			Bucket: bucket,
 		},
 		Ingestion: make(map[string]*IngestionContext),
+		FlushConfig: &FlushConfigContext{
+			defaultLogLevel: 0,
+			hardDeltas:      hardDeltas,
+			softDeltas:      softDeltas,
+		},
 	}
 
 	return pluginCtx, nil

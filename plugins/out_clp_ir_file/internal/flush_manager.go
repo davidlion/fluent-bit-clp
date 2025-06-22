@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// FlushManager allows updating flush strategy based on log level and timestamp.
+// FlushManager allows updating the flush strategy based on log level and timestamp.
 type FlushManager interface {
-	Update(level int, timestamp time.Time)
+	Update(level int, timestamp time.Time, flushConfig *FlushConfigContext)
 }
 
 // Callback is called when a flush timer fires.
@@ -22,19 +22,19 @@ func (m *FlushContext) Callback() {
 	m.userCallback()
 }
 
-// Update schedules new hard/soft flush timers based on the log level and timestamp.
-func (m *FlushContext) Update(level int, timestamp time.Time) {
+// Update schedules with new hard/soft flush timers based on the log level and timestamp.
+func (m *FlushContext) Update(level int, timestamp time.Time, flushConfig *FlushConfigContext) {
 	m.Mutex.Lock()
 	defer m.Mutex.Unlock()
 
-	hardDelta := getDeltaSafe(level, m.hardDeltas, m.defaultLogLevel, "hard")
+	hardDelta := getDeltaSafe(level, flushConfig.hardDeltas, flushConfig.defaultLogLevel, "hard")
 	nextHardTimeout := timestamp.Add(hardDelta)
 	if nextHardTimeout.IsZero() || nextHardTimeout.Before(m.hardTimeout) {
 		replaceTimer(&m.HardTimer, time.Until(nextHardTimeout), m.Callback)
 		m.hardTimeout = nextHardTimeout
 	}
 
-	softDelta := getDeltaSafe(level, m.softDeltas, m.defaultLogLevel, "soft")
+	softDelta := getDeltaSafe(level, flushConfig.softDeltas, flushConfig.defaultLogLevel, "soft")
 	if softDelta < m.softDelta {
 		m.softDelta = softDelta
 	}
