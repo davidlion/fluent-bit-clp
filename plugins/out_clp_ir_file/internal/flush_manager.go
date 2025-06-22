@@ -12,7 +12,7 @@ type FlushManager interface {
 }
 
 // Callback is called when a flush timer fires.
-func (m *FlushContext) Callback() {
+func (m *flushContext) Callback() {
 	m.Mutex.Lock()
 	defer m.Mutex.Unlock()
 
@@ -23,7 +23,7 @@ func (m *FlushContext) Callback() {
 }
 
 // Update schedules with new hard/soft flush timers based on the log level and timestamp.
-func (m *FlushContext) Update(level int, timestamp time.Time, flushConfig *FlushConfigContext) {
+func (m *flushContext) Update(level int, timestamp time.Time, flushConfig *FlushConfigContext) {
 	m.Mutex.Lock()
 	defer m.Mutex.Unlock()
 
@@ -61,7 +61,7 @@ func getDeltaSafe(level int, deltas []time.Duration, defaultLevel int, label str
 }
 
 // stopAndClearTimers stops and clears both hard and soft timers.
-func (m *FlushContext) stopAndClearTimers() {
+func (m *flushContext) stopAndClearTimers() {
 	stopTimer(&m.HardTimer)
 	stopTimer(&m.SoftTimer)
 }

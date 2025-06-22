@@ -6,17 +6,22 @@ import (
 	"time"
 )
 
+const (
+	testDeltaDuration   = 50 * time.Millisecond
+	testWaitGroupsDelta = 1
+)
+
 func TestFlushManager(t *testing.T) {
 	flushConfig := &FlushConfigContext{
 		defaultLogLevel: 0,
-		hardDeltas:      []time.Duration{50 * time.Millisecond},
-		softDeltas:      []time.Duration{50 * time.Millisecond},
+		hardDeltas:      []time.Duration{testDeltaDuration},
+		softDeltas:      []time.Duration{testDeltaDuration},
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(1)
+	wg.Add(testWaitGroupsDelta)
 
-	flushCtx := &FlushContext{
+	flushCtx := &flushContext{
 		HardTimer: time.NewTimer(0),
 		SoftTimer: time.NewTimer(0),
 		userCallback: func() {

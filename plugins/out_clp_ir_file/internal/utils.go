@@ -44,27 +44,10 @@ func GetOrCreateIngestionContext(pluginCtx *PluginContext, path string) (*Ingest
 		return nil, fmt.Errorf("failed to create IR writer: %w", err)
 	}
 
-	// Timers must be stopped and drained if not used,
-	// but here we assume they're managed in FlushContext logic.
-	flushCtx := &FlushContext{
-		HardTimer: time.NewTimer(0),
-		SoftTimer: time.NewTimer(0),
-		userCallback: func() {
-			if err := zstdWriter.Flush(); err != nil {
-				log.Printf("[error] zstdWriter.Flush failed: %v", err)
-			}
-
-			if err := S3Upload(pluginCtx.S3.Client, pluginCtx.S3.Bucket, tempFile.Name(),
-				// mt.Sprintf("%s.%d.clp.zst", path, time.Now().UnixMilli()),
-				fmt.Sprintf("%s.clp.zst", path),
-			); err != nil {
-				log.Printf("[error] Failed to upload to S3: %v", err)
-			}
-		},
-	}
+	flushCtx := newFlushContext(pluginCtx, path, tempFile, zstdWriter)
 
 	ingestionContext := &IngestionContext{
-		Compression: &CompressionContext{
+		Compression: &compressionContext{
 			File:       tempFile,
 			ZstdWriter: zstdWriter,
 			IRWriter:   irWriter,
@@ -131,6 +114,7 @@ func S3ValidateLogBucket(s3Client *s3.Client, logBucket string) error {
 
 // S3Upload uploads the specified local file to the given S3 bucket and path.
 func S3Upload(s3Client *s3.Client, bucket, localPath, remotePath string) error {
+	// #nosec G304 -- localPath is trusted
 	file, err := os.Open(localPath)
 	if err != nil {
 		return fmt.Errorf("failed to open file %q: %w", localPath, err)
@@ -152,4 +136,28 @@ func S3Upload(s3Client *s3.Client, bucket, localPath, remotePath string) error {
 	}
 	log.Printf("[info] Uploaded %s to s3://%s/%s", localPath, bucket, remotePath)
 	return nil
+}
+
+func newFlushContext(
+	pluginCtx *PluginContext,
+	path string,
+	tempFile *os.File,
+	zstdWriter *zstd.Encoder,
+) *flushContext {
+	// Timers must be stopped and drained if not used,
+	// but here we assume they're managed in flushContext logic.
+	return &flushContext{
+		HardTimer: time.NewTimer(0),
+		SoftTimer: time.NewTimer(0),
+		userCallback: func() {
+			if err := zstdWriter.Flush(); err != nil {
+				log.Printf("[error] zstdWriter.Flush failed: %v", err)
+			}
+			if err := S3Upload(pluginCtx.S3.Client, pluginCtx.S3.Bucket, tempFile.Name(),
+				fmt.Sprintf("%s.clp.zst", path),
+			); err != nil {
+				log.Printf("[error] Failed to upload to S3: %v", err)
+			}
+		},
+	}
 }

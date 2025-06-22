@@ -20,6 +20,22 @@ import (
 )
 
 const (
+	LogLevelDebug = iota
+	LogLevelInfo
+	LogLevelWarn
+	LogLevelError
+	LogLevelFatal
+)
+
+var logLevelMap = map[string]int{
+	"debug": LogLevelDebug,
+	"info":  LogLevelInfo,
+	"warn":  LogLevelWarn,
+	"error": LogLevelError,
+	"fatal": LogLevelFatal,
+}
+
+const (
 	PluginName  = "out_clp_ir_file"
 	filePathKey = "file_path"
 )
@@ -47,18 +63,15 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
-	// Retrieve plugin context.
-	p := output.FLBPluginGetContext(ctx)
-	pluginCtx, ok := p.(*internal.PluginContext)
+	pluginCtx, ok := getPluginContext(ctx)
 	if !ok {
-		log.Println("[error] Could not read context during flush.")
 		return output.FLB_ERROR
 	}
 
 	flushConfig := pluginCtx.FlushConfig
 	tagStr := C.GoString(tag)
-
 	dec := decoder.New(data, int(length))
+
 	for {
 		flbTimestamp, jsonRecord, err := decoder.GetRecord(dec)
 		if err != nil {
@@ -68,79 +81,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 			break
 		}
 
-		var timestamp time.Time
-		switch t := flbTimestamp.(type) {
-		case decoder.FlbTime:
-			timestamp = t.Time
-		case uint64:
-			timestamp = time.UnixMilli(int64(t))
-		default:
-			log.Printf("[warn] Invalid time type (%T), defaulting to now.", t)
-			timestamp = time.Now()
-		}
-
-		var userKvPairs map[string]any
-		if err := json.Unmarshal(jsonRecord, &userKvPairs); err != nil {
-			log.Printf("[error] Failed to unmarshal JSON record %q: %v", string(jsonRecord), err)
-			continue // Should simply log skip to the next event
-		}
-
-		ingestionCtx, err := internal.GetOrCreateIngestionContext(pluginCtx, tagStr)
-		if err != nil || ingestionCtx == nil {
-			log.Printf("[error] Failed to get or create ingestion context for tag %s: %v",
-				tagStr, err)
-			continue // Should simply log skip to the next event
-		}
-
-		// CLP IrV2 makes a differentiation between auto-generated KV and user KV. For now,
-		// we mark the timestamp and file_path as auto-generated KV, leaving the rest as user KV.
-		event := ffi.NewLogEvent()
-		event.AutoKvPairs["timestamp"] = timestamp.UnixMilli()
-		// Extract file_path if it exists, otherwise set as an empty string.
-		filePath, exists := userKvPairs[filePathKey]
-		if exists {
-			delete(userKvPairs, filePathKey)
-		} else {
-			filePath = ""
-		}
-		event.AutoKvPairs[filePathKey] = filePath
-
-		event.UserKvPairs = userKvPairs
-		if _, err := ingestionCtx.Compression.IRWriter.WriteLogEvent(*event); err != nil {
-			log.Printf("[error] Failed to write log event: %v", err)
-			continue // Should simply log skip to the next event
-		}
-
-		// Handle log level with fallback and warning.
-		var level int
-		if lvl, found := userKvPairs["LogLevel"]; found {
-			switch lvlStr := lvl.(type) {
-			case string:
-				switch lvlStr {
-				case "debug":
-					level = 0
-				case "info":
-					level = 1
-				case "warn":
-					level = 2
-				case "error":
-					level = 3
-				case "fatal":
-					level = 4
-				default:
-					log.Printf("[warn] Unknown log level %q, defaulting to 1 (info).", lvlStr)
-					level = 1
-				}
-			default:
-				log.Printf("[warn] LogLevel is not a string, defaulting to 1 (info).")
-				level = 1
-			}
-		} else {
-			log.Printf("[warn] LogLevel not found, defaulting to 1 (info).")
-			level = 1
-		}
-
-		ingestionCtx.Flush.Update(level, timestamp, flushConfig)
+		processDecodedRecord(pluginCtx, tagStr, flushConfig, flbTimestamp, jsonRecord)
 	}
 
 	return output.FLB_OK
@@ -148,10 +89,8 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 
 //export FLBPluginExitCtx
 func FLBPluginExitCtx(ctx unsafe.Pointer) int {
-	p := output.FLBPluginGetContext(ctx)
-	pluginCtx, ok := p.(*internal.PluginContext)
+	pluginCtx, ok := getPluginContext(ctx)
 	if !ok {
-		log.Println("[error] Could not read context during exit.")
 		return output.FLB_ERROR
 	}
 
@@ -178,6 +117,110 @@ func FLBPluginExitCtx(ctx unsafe.Pointer) int {
 
 	log.Println("[info] Plugin shutdown complete.")
 	return output.FLB_OK
+}
+
+func getPluginContext(ctx unsafe.Pointer) (*internal.PluginContext, bool) {
+	p := output.FLBPluginGetContext(ctx)
+	pluginCtx, ok := p.(*internal.PluginContext)
+	if !ok {
+		log.Println("[error] Could not read context.")
+	}
+	return pluginCtx, ok
+}
+
+func processDecodedRecord(
+	pluginCtx *internal.PluginContext,
+	tagStr string,
+	flushConfig *internal.FlushConfigContext,
+	flbTimestamp any,
+	jsonRecord []byte,
+) {
+	timestamp := parseTimestamp(flbTimestamp)
+
+	userKvPairs, ok := unmarshalUserKvPairs(jsonRecord)
+	if !ok {
+		return
+	}
+
+	ingestionCtx, err := internal.GetOrCreateIngestionContext(pluginCtx, tagStr)
+	if err != nil || ingestionCtx == nil {
+		log.Printf("[error] Failed to get or create ingestion context for tag %s: %v", tagStr, err)
+		return
+	}
+
+	event := buildLogEvent(timestamp, userKvPairs)
+
+	if !writeLogEvent(ingestionCtx, event) {
+		return
+	}
+
+	level := extractLogLevel(userKvPairs)
+	ingestionCtx.Flush.Update(level, timestamp, flushConfig)
+}
+
+func parseTimestamp(flbTimestamp any) time.Time {
+	switch t := flbTimestamp.(type) {
+	case decoder.FlbTime:
+		return t.Time
+	case uint64:
+		return time.UnixMilli(int64(t))
+	default:
+		log.Printf("[warn] Invalid time type (%T), defaulting to now.", t)
+		return time.Now()
+	}
+}
+
+func unmarshalUserKvPairs(jsonRecord []byte) (map[string]any, bool) {
+	var userKvPairs map[string]any
+	if err := json.Unmarshal(jsonRecord, &userKvPairs); err != nil {
+		log.Printf("[error] Failed to unmarshal JSON record %q: %v", string(jsonRecord), err)
+		return nil, false
+	}
+	return userKvPairs, true
+}
+
+func buildLogEvent(timestamp time.Time, userKvPairs map[string]any) *ffi.LogEvent {
+	// CLP IrV2 makes a differentiation between auto-generated KV and user KV. For now,
+	// we mark the timestamp and file_path as auto-generated KV, leaving the rest as user KV.
+	event := ffi.NewLogEvent()
+	event.AutoKvPairs["timestamp"] = timestamp.UnixMilli()
+
+	filePath, exists := userKvPairs[filePathKey]
+	if exists {
+		delete(userKvPairs, filePathKey)
+	} else {
+		filePath = ""
+	}
+	event.AutoKvPairs[filePathKey] = filePath
+	event.UserKvPairs = userKvPairs
+	return event
+}
+
+func writeLogEvent(ingestionCtx *internal.IngestionContext, event *ffi.LogEvent) bool {
+	if _, err := ingestionCtx.Compression.IRWriter.WriteLogEvent(*event); err != nil {
+		log.Printf("[error] Failed to write log event: %v", err)
+		return false
+	}
+	return true
+}
+
+func extractLogLevel(userKvPairs map[string]any) int {
+	level := LogLevelInfo
+	if lvl, found := userKvPairs["LogLevel"]; found {
+		if lvlStr, ok := lvl.(string); ok {
+			if mapped, ok := logLevelMap[lvlStr]; ok {
+				level = mapped
+			} else {
+				log.Printf("[warn] Unknown log level %q, defaulting to %d (info).",
+					lvlStr, LogLevelInfo)
+			}
+		} else {
+			log.Printf("[warn] LogLevel is not a string, defaulting to %d (info).", LogLevelInfo)
+		}
+	} else {
+		log.Printf("[warn] LogLevel not found, defaulting to %d (info).", LogLevelInfo)
+	}
+	return level
 }
 
 func main() {

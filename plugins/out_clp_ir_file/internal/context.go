@@ -20,8 +20,8 @@ type FlushConfigContext struct {
 	softDeltas      []time.Duration
 }
 
-// FlushContext manages timing and callback logic for log flushing.
-type FlushContext struct {
+// flushContext manages timing and callback logic for log flushing.
+type flushContext struct {
 	HardTimer    *time.Timer
 	hardTimeout  time.Time
 	softDelta    time.Duration
@@ -30,8 +30,8 @@ type FlushContext struct {
 	Mutex        sync.Mutex
 }
 
-// CompressionContext encapsulates file and compression writers.
-type CompressionContext struct {
+// compressionContext encapsulates file and compression writers.
+type compressionContext struct {
 	File       *os.File
 	ZstdWriter *zstd.Encoder
 	IRWriter   *ir.Writer
@@ -39,34 +39,21 @@ type CompressionContext struct {
 
 // IngestionContext contains compression and flush contexts for a particular log path.
 type IngestionContext struct {
-	Compression *CompressionContext
-	Flush       *FlushContext
+	Compression *compressionContext
+	Flush       *flushContext
 }
 
-// S3Context holds AWS S3 configuration and client.
-type S3Context struct {
+// s3Context holds AWS S3 configuration and client.
+type s3Context struct {
 	Client *s3.Client
 	Bucket string
 }
 
 // PluginContext is the top-level context for the plugin.
 type PluginContext struct {
-	S3          *S3Context
+	S3          *s3Context
 	Ingestion   map[string]*IngestionContext
 	FlushConfig *FlushConfigContext
-}
-
-func GetConfigWithDefaultTimeDuration(
-	plugin unsafe.Pointer,
-	key string,
-	defaultVal time.Duration,
-) time.Duration {
-	duration, err := time.ParseDuration(output.FLBPluginConfigKey(plugin, key))
-	if err != nil {
-		log.Printf("[error] Failed to parse duration %q: %v", key, err)
-		return defaultVal
-	}
-	return duration
 }
 
 // NewPluginContext initializes a new PluginContext
@@ -86,22 +73,22 @@ func NewPluginContext(plugin unsafe.Pointer) (*PluginContext, error) {
 
 	// Flush behavior control - use very aggressive defaults for now
 	hardDeltas := []time.Duration{
-		GetConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_debug", 3*time.Second),
-		GetConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_info", 3*time.Second),
-		GetConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_warn", 3*time.Second),
-		GetConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_error", 3*time.Second),
-		GetConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_fatal", 3*time.Second),
+		getConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_debug", 3*time.Second),
+		getConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_info", 3*time.Second),
+		getConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_warn", 3*time.Second),
+		getConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_error", 3*time.Second),
+		getConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_fatal", 3*time.Second),
 	}
 	softDeltas := []time.Duration{
-		GetConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_debug", 3*time.Second),
-		GetConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_info", 3*time.Second),
-		GetConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_warn", 3*time.Second),
-		GetConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_error", 3*time.Second),
-		GetConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_fatal", 3*time.Second),
+		getConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_debug", 3*time.Second),
+		getConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_info", 3*time.Second),
+		getConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_warn", 3*time.Second),
+		getConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_error", 3*time.Second),
+		getConfigWithDefaultTimeDuration(plugin, "flush_soft_delta_fatal", 3*time.Second),
 	}
 
 	pluginCtx := &PluginContext{
-		S3: &S3Context{
+		S3: &s3Context{
 			Client: client,
 			Bucket: bucket,
 		},
@@ -114,4 +101,17 @@ func NewPluginContext(plugin unsafe.Pointer) (*PluginContext, error) {
 	}
 
 	return pluginCtx, nil
+}
+
+func getConfigWithDefaultTimeDuration(
+	plugin unsafe.Pointer,
+	key string,
+	defaultVal time.Duration,
+) time.Duration {
+	duration, err := time.ParseDuration(output.FLBPluginConfigKey(plugin, key))
+	if err != nil {
+		log.Printf("[error] Failed to parse duration %q: %v", key, err)
+		return defaultVal
+	}
+	return duration
 }
