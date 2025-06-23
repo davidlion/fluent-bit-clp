@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	LogLevelDebug = iota
+	LogLevelTrace = iota
+	LogLevelDebug
 	LogLevelInfo
 	LogLevelWarn
 	LogLevelError
@@ -28,11 +29,27 @@ const (
 )
 
 var logLevelMap = map[string]int{
-	"debug": LogLevelDebug,
-	"info":  LogLevelInfo,
-	"warn":  LogLevelWarn,
-	"error": LogLevelError,
-	"fatal": LogLevelFatal,
+	"trace":    LogLevelTrace,
+	"TRACE":    LogLevelTrace,
+	"debug":    LogLevelDebug,
+	"DEBUG":    LogLevelDebug,
+	"D":        LogLevelDebug,
+	"info":     LogLevelInfo,
+	"INFO":     LogLevelInfo,
+	"I":        LogLevelInfo,
+	"warn":     LogLevelWarn,
+	"warning":  LogLevelWarn,
+	"WARN":     LogLevelWarn,
+	"WARNING":  LogLevelWarn,
+	"W":        LogLevelWarn,
+	"critical": LogLevelError,
+	"error":    LogLevelError,
+	"CRITICAL": LogLevelError,
+	"ERROR":    LogLevelError,
+	"E":        LogLevelError,
+	"wtf":      LogLevelFatal,
+	"fatal":    LogLevelFatal,
+	"FATAL":    LogLevelFatal,
 }
 
 const (
@@ -154,7 +171,7 @@ func processDecodedRecord(
 		return
 	}
 
-	level := extractLogLevel(userKvPairs)
+	level := extractLogLevel(userKvPairs, flushConfig)
 	ingestionCtx.Flush.Update(level, timestamp, flushConfig)
 }
 
@@ -204,9 +221,9 @@ func writeLogEvent(ingestionCtx *internal.IngestionContext, event *ffi.LogEvent)
 	return true
 }
 
-func extractLogLevel(userKvPairs map[string]any) int {
+func extractLogLevel(userKvPairs map[string]any, flushConfig *internal.FlushConfigContext) int {
 	level := LogLevelInfo
-	if lvl, found := userKvPairs["LogLevel"]; found {
+	if lvl, found := userKvPairs[flushConfig.LogLevelKey]; found {
 		if lvlStr, ok := lvl.(string); ok {
 			if mapped, ok := logLevelMap[lvlStr]; ok {
 				level = mapped

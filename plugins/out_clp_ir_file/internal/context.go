@@ -15,6 +15,7 @@ import (
 
 // FlushConfigContext stores the flush control configurations
 type FlushConfigContext struct {
+	LogLevelKey     string
 	defaultLogLevel int
 	hardDeltas      []time.Duration
 	softDeltas      []time.Duration
@@ -71,6 +72,9 @@ func NewPluginContext(plugin unsafe.Pointer) (*PluginContext, error) {
 	}
 	log.Printf("[info] Logs are configured to be uploaded to s3://%s", bucket)
 
+	logLevelKey := getConfigWithDefaultString(plugin, "log_level_key", "level")
+	log.Printf("[info] Log level key is configured to: %q", logLevelKey)
+
 	// Flush behavior control - use very aggressive defaults for now
 	hardDeltas := []time.Duration{
 		getConfigWithDefaultTimeDuration(plugin, "flush_hard_delta_debug", 3*time.Second),
@@ -94,6 +98,7 @@ func NewPluginContext(plugin unsafe.Pointer) (*PluginContext, error) {
 		},
 		Ingestion: make(map[string]*IngestionContext),
 		FlushConfig: &FlushConfigContext{
+			LogLevelKey:     logLevelKey,
 			defaultLogLevel: 0,
 			hardDeltas:      hardDeltas,
 			softDeltas:      softDeltas,
@@ -114,4 +119,16 @@ func getConfigWithDefaultTimeDuration(
 		return defaultVal
 	}
 	return duration
+}
+
+func getConfigWithDefaultString(
+	plugin unsafe.Pointer,
+	key,
+	defaultVal string,
+) string {
+	val := output.FLBPluginConfigKey(plugin, key)
+	if val == "" {
+		return defaultVal
+	}
+	return val
 }

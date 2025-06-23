@@ -12,29 +12,41 @@ data:
       daemon: "off"
       log_level: "trace"
 
+    parsers:
+      - name: "json"
+        format: "json"
+        json_error_key: "message"
+
     pipeline:
       inputs:
         - name: "tail"
-          path: "/logs/*/test-*.log"
+          path: "/logs/*/test-*.jsonl"
+          parser: json
           path_key: "file_path"
-          tag_regex: "^\/logs\/(?<user_name>[^\/]+)\/(?<file_name>test-.*\\.log)$"
+          tag_regex: "^\/logs\/(?<user_name>[^\/]+)\/(?<file_name>test-.*\\.jsonl)$"
           tag: "<user_name>/<file_name>"
           # The interval of refreshing the list of watched files in seconds
           refresh_interval: 5
           # For new discovered files on start (without a database offset/position),
           # read the content from the head of the file, not tail.
           read_from_head: true
-          # Skips empty lines in the log file from any further processing or output
-          skip_empty_lines: true
           # When a message is unstructured (no parser applied), it's appended as a string under the key
           # name log. This option allows to define an alternative name for that key.
           key: "message"
+          buffer_max_size: "1MB"
           processors: []
+
+      filters:
+        - name: "modify"
+          match: "*"
+          Add:
+            - "level INFO"
 
       outputs:
         - name: "out_clp_ir_file"
           match: "*/*"
           log_bucket: "logs"
+          log_level_key: "level"
           flush_hard_delta_debug: "30s"
           flush_hard_delta_info: "30s"
           flush_hard_delta_warn: "30s"

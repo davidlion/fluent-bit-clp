@@ -50,13 +50,30 @@ kubectl exec -it fluent-bit-sidecar -c ubuntu -n default -- /bin/bash
 
 # Test log collection
 mkdir -p /logs/$(whoami)/
-echo '{"message": "a log message"}' > /logs/$(whoami)/test-0.log
+echo '{"message": "a log message", "level": "error"}' > /logs/$(whoami)/test-0.jsonl
 
 # Inspect the logs for fluent-bit
 kubectl logs fluent-bit-sidecar -c fluent-bit-sidecar
 # We should get the following
 2025/06/11 16:14:29 [info] Uploaded /tmp/clp-irv2-1474549675.clp.zst to s3://logs/root/test-0.log.clp.zst
+```
 
+#### Fluent-bit-sidecar-full
+```shell 
+# Fluent-bit configs are in the yaml file
+kubectl apply -f fluent-bit-sidecar-full.yaml -f fluent-bit-sidecar-config-full.yaml -f aws-credentials.yaml
+
+# To launch a shell into the fluent-bit container
+kubectl exec -it fluent-bit-sidecar-full -c ubuntu -n default -- /bin/bash
+
+# Test log collection
+mkdir -p /logs/$(whoami)/
+echo '{"message": "a log message", "level": "error"}' > /logs/$(whoami)/test-1.jsonl
+
+# Inspect the logs for fluent-bit
+kubectl logs fluent-bit-sidecar-full -c fluent-bit-sidecar -f
+# We should get the following
+2025/06/11 16:14:29 [info] Uploaded /tmp/clp-irv2-1474549675.clp.zst to s3://logs/root/test-0.log.clp.zst
 ```
 
 #### Fluent-bit-daemonset
@@ -73,7 +90,7 @@ kubectl exec -it ubuntu -n default -- /bin/bash
 # Test log collection
 # Test log collection
 mkdir -p /logs/$(whoami)/
-echo '{"message": "a log message"}' > /var/log/$(whoami)/test-0.log
+echo '{"message": "a log message", "level": "error"}' > /logs/$(whoami)/test-1.jsonl
 # Afterwards, /tmp/compressed-logs.clp.zst file should be created containing compressed logs
 
 # port forward
@@ -90,3 +107,9 @@ k3d cluster delete yscope
 [docker]: https://docs.docker.com/engine/install
 [k3d]: https://k3d.io/stable/#installation
 [kubectl]: https://kubernetes.io/docs/tasks/tools/#kubectl
+
+    filters:
+      - name: "modify"
+        match: "*"
+        add:
+          - level INFO

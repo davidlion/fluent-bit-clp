@@ -15,7 +15,9 @@ spec:
 
     # Fluent-bit sidecar
     - name: "fluent-bit-sidecar"
+#      image: "fluent/fluent-bit:3.2.7-debug"
       image: "fluent/fluent-bit:3.2.7"
+#      command: ["sleep", "infinity"]
       args: ["-c", "/fluent-bit/etc/fluent-bit.yaml"]
       env:
         - name: "AWS_ENDPOINT_URL"
