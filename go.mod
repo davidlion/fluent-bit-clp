@@ -2,11 +2,9 @@ module github.com/y-scope/fluent-bit-clp
 
 go 1.24.3
 
-replace github.com/y-scope/clp-ffi-go => github.com/davidlion/clp-ffi-go v0.0.7-beta.0.20250526213030-742321b50181
-
 require (
 	github.com/fluent/fluent-bit-go v0.0.0-20230731091245-a7a013e2473c
-	github.com/y-scope/clp-ffi-go v0.0.3-0.20240604153926-969c1151cfcb
+	github.com/y-scope/clp-ffi-go v0.0.9-beta.0.20250629182525-0dc22d574855
 )
 
 require (
